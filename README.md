@@ -4,4 +4,4 @@
 1. Investigate remaining imgaug augmentation transformations available and select subset most appropriate for task 
 1. Investigate setting up Multicore image augmentation processing to speed up sequential augmentations 
 1. Finalize augmentation pipeline and augment full image set to start model training 
-1. Push final XML to TXT annotation file conversion pipeline code to shared repo - DONE
+1. Push final XML to TXT annotation file conversion pipeline code to shared repo - **DONE**
