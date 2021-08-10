@@ -10,3 +10,8 @@
 
 1. XML_to_TXT_Annotation_Conversion_Pipeline.ipynb to convert XML annotation files to TXT for YOLOv5 use 
 1. A01 - Load and Augment an Image.ipynb to define augmentations to apply to input images
+
+
+#### Background Information
+
+IEEE road distress page https://rdd2020.sekilab.global/
