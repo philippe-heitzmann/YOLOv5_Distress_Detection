@@ -15,3 +15,9 @@
 #### Background Information
 
 IEEE road distress page https://rdd2020.sekilab.global/
+
+
+Example App View of Detected Road Distresses:
+
+![image](https://user-images.githubusercontent.com/8759492/128953853-c481f587-efc5-4a58-a0b2-7d2ed1f987e1.png)
+
