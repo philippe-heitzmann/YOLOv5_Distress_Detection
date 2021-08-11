@@ -13,11 +13,12 @@
 
 ### Development Roadmap:
 1. [October 2021] Build desktop app that can take image or video files with embedded EXIF metadata as input and return geolocated map showing where distresses occured 
-2. [October 2021] Run Inference on 
-3. Train and Deploy object detection models to 
-4. [After October 2021] Build iPhone app that 
-
 ![image](https://user-images.githubusercontent.com/8759492/128956163-ebbb5a5c-5426-4594-b5c3-9d65149fc78b.png)
+1. [October 2021] Run Inference using iPhone taking pictures / video from dashboard mount inside car to develop initial proof of concept 
+1. [October 2021] Optional - Publish paper showing object detection results & model performance thus far
+1. [After October 2021] Build iPhone app that can show real-time object detection in top half of screen and real-time mapping of identified distress relative to current user location as user is driving in bottom half of screen 
+
+![image](https://user-images.githubusercontent.com/8759492/128957315-8cae1c19-deac-4e65-9ed9-5fca93acd62a.png)
 
 
 #### Background Information
