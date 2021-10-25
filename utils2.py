@@ -78,4 +78,87 @@ def check_img_labels_match(imgspath, labelspath, imgsextension, labelsextension,
     
     return images_not_in_labels, labels_not_in_images
 
+
+from xml.dom import minidom
+import os
+import glob
+
+
+
+def convert_coordinates(size, box):
+    dw = 1.0/size[0]
+    dh = 1.0/size[1]
+    x = (box[0]+box[1])/2.0
+    y = (box[2]+box[3])/2.0
+    w = box[1]-box[0]
+    h = box[3]-box[2]
+    x = x*dw
+    w = w*dw
+    y = y*dh
+    h = h*dh
+    return (x,y,w,h)
+
+
+@tdec
+def convert_xml2yolo(path, extension = 'xml', xmlsdir = 'xmls'):
+    '''Inputs:
+    extension: make sure to pass without any punctuation, i.e. India_0001.xml should be extension = 'xml' '''
+
+    files = [f for f in next(walk(path), (None, None, []))[2] if f.endswith(extension)] 
+    
+    for file in files:
+        xmldoc = minidom.parse(path + os.sep + file)
+        idx = len(extension) + 1
+        fname_out = (file[:-idx]+'.txt')
+        outpath = path.replace(xmlsdir, 'labels', 1) + os.sep + fname_out
+
+        with open(outpath, "w") as f:
+
+            itemlist = xmldoc.getElementsByTagName('object')
+            size = xmldoc.getElementsByTagName('size')[0]
+            width = int((size.getElementsByTagName('width')[0]).firstChild.data)
+            height = int((size.getElementsByTagName('height')[0]).firstChild.data)
+
+            for item in itemlist:
+                # get class label
+                classid =  (item.getElementsByTagName('name')[0]).firstChild.data
+
+                # get bbox coordinates
+                xmin = ((item.getElementsByTagName('bndbox')[0]).getElementsByTagName('xmin')[0]).firstChild.data
+                ymin = ((item.getElementsByTagName('bndbox')[0]).getElementsByTagName('ymin')[0]).firstChild.data
+                xmax = ((item.getElementsByTagName('bndbox')[0]).getElementsByTagName('xmax')[0]).firstChild.data
+                ymax = ((item.getElementsByTagName('bndbox')[0]).getElementsByTagName('ymax')[0]).firstChild.data
+                b = (float(xmin), float(xmax), float(ymin), float(ymax))
+                bb = convert_coordinates((width,height), b)
+                f.write(classid + " " + " ".join([("%.6f" % a) for a in bb]) + '\n')
+
+        print ("wrote %s" % fname_out)
+    return 'Done creating txts from xmls in {}'.format(path.replace(xmlsdir, 'labels', 1))
+
+
+@tdec
+def show_preds(dict_preds: Dict, labeldict, rootpath = './data/test2/Japan/images/images/') -> None:
+    '''Function to show bounding box predictions on a set of images'''
+    
+    for img, labels in dict_preds.items():
+        img_path = rootpath + img
+        img = cv2.imread(img_path)
+        color = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+        plt.imshow(color)
+        plt.title('Image')
+        fig, ax = plt.subplots(figsize = (6,9))
+
+        for l in labels:
+            indlabels = l.split(' ')
+            l, x, y, w, h = labeldict[indlabels[0]], int(indlabels[1]), int(indlabels[2]), int(indlabels[3]), int(indlabels[4])
+            ax.xaxis.tick_top()
+            ax.add_patch(patches.Rectangle((x,y),w,h, fill=False, edgecolor='red', lw=2))
+            ax.text(x,(y-50),str(l),verticalalignment='top', color='white',fontsize=10,
+                    weight='bold').set_path_effects([patheffects.Stroke(linewidth=4, foreground='black'), patheffects.Normal()])
+        print(img_path)
+        ax.imshow(img)
+
+    return 'Done Outputting Bounding Box Image Visualizations'
+
+
             
