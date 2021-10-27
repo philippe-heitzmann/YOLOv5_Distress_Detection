@@ -7,6 +7,11 @@ from pathlib import Path
 from tqdm import tqdm
 import json
 import urllib
+from xml.dom import minidom
+import os
+import glob
+from os import walk
+
 
 #computer vision
 import cv2
@@ -16,7 +21,6 @@ import torchvision
 #ML 
 from sklearn.model_selection import train_test_split
 
-
 #display
 from IPython.display import display
 from pylab import rcParams
@@ -24,12 +28,13 @@ from pylab import rcParams
 #visualization
 import seaborn as sns
 import matplotlib.pyplot as plt
-from matplotlib import rc
+from matplotlib import rc, patches, patheffects
 import PIL.Image as Image
 
+#styling
+from typing import List, Dict
 
 import time 
-from os import walk
 
 def tdec(func):
     def inner(*args, **kwargs):
@@ -41,7 +46,7 @@ def tdec(func):
 
 
 @tdec
-def get_files_in_dir(path = './data/train/Japan/labels', show_folders = True, **kwargs):
+def get_files_in_dir(path = './data/train/Japan/labels', show_folders = False, **kwargs):
     'Function to return all files in a directory with option of filtering for specific filetype extension'
     
     files = next(walk(path), (None, None, []))[2]
@@ -50,14 +55,18 @@ def get_files_in_dir(path = './data/train/Japan/labels', show_folders = True, **
     
     if show_folders:
         folders = next(walk(path), (None, None, []))[1]
-        return files, folders, path
-    return files, path
+        return files, folders
+    return files
 
 
 @tdec
 def check_img_labels_match(imgspath, labelspath, imgsextension, labelsextension, **kwargs):
-    labels_files, labels_folders, labels_path = get_files_in_dir(path = labelspath, extension = labelsextension, **kwargs)
-    images_files, images_folders, images_path = get_files_in_dir(path = imgspath, extension = imgsextension, **kwargs)
+    if 'show_folders' in kwargs and kwargs['show_folders']:
+        labels_files, labels_folders = get_files_in_dir(path = labelspath, extension = labelsextension, **kwargs)
+        images_files, images_folders = get_files_in_dir(path = imgspath, extension = imgsextension, **kwargs)
+    else:
+        labels_files = get_files_in_dir(path = labelspath, extension = labelsextension, **kwargs)
+        images_files = get_files_in_dir(path = imgspath, extension = imgsextension, **kwargs)
     imageids, labelids = [], []
     for imageid, labelid in zip(images_files, labels_files):
         imageids.append(imageid.split('.')[0])
@@ -74,33 +83,32 @@ def check_img_labels_match(imgspath, labelspath, imgsextension, labelsextension,
     if len(images_not_in_labels) > 0: print(images_not_in_labels, ' image IDs not found in labels folder')
     else: print('All specified image IDs found in labels folder')
     if len(labels_not_in_images) > 0: print(labels_not_in_images, ' label IDs not found in images folder')
-    else: print('All specified image IDs found in labels folder')
+    else: print('All specified label IDs found in images folder')
     
     return images_not_in_labels, labels_not_in_images
 
 
-from xml.dom import minidom
-import os
-import glob
 
 
 
-def convert_coordinates(size, box):
+
+def convert_coordinates(size, box, normalize = True):
     dw = 1.0/size[0]
     dh = 1.0/size[1]
     x = (box[0]+box[1])/2.0
     y = (box[2]+box[3])/2.0
     w = box[1]-box[0]
     h = box[3]-box[2]
-    x = x*dw
-    w = w*dw
-    y = y*dh
-    h = h*dh
+    if normalize:
+        x = x*dw
+        w = w*dw
+        y = y*dh
+        h = h*dh
     return (x,y,w,h)
 
-
+# labelsdict,
 @tdec
-def convert_xml2yolo(path, extension = 'xml', xmlsdir = 'xmls'):
+def convert_xml_to_yolo(path, labelsdict, extension = 'xml', xmlsdir = 'xmls', normalize = True):
     '''Inputs:
     extension: make sure to pass without any punctuation, i.e. India_0001.xml should be extension = 'xml' '''
 
@@ -121,15 +129,18 @@ def convert_xml2yolo(path, extension = 'xml', xmlsdir = 'xmls'):
 
             for item in itemlist:
                 # get class label
-                classid =  (item.getElementsByTagName('name')[0]).firstChild.data
-
+                try:    
+                    classid =  labelsdict[(item.getElementsByTagName('name')[0]).firstChild.data]
+                except: classid = 0
                 # get bbox coordinates
                 xmin = ((item.getElementsByTagName('bndbox')[0]).getElementsByTagName('xmin')[0]).firstChild.data
                 ymin = ((item.getElementsByTagName('bndbox')[0]).getElementsByTagName('ymin')[0]).firstChild.data
                 xmax = ((item.getElementsByTagName('bndbox')[0]).getElementsByTagName('xmax')[0]).firstChild.data
                 ymax = ((item.getElementsByTagName('bndbox')[0]).getElementsByTagName('ymax')[0]).firstChild.data
                 b = (float(xmin), float(xmax), float(ymin), float(ymax))
-                bb = convert_coordinates((width,height), b)
+                if normalize:
+                    bb = convert_coordinates((width,height), b, normalize = True)
+                else: bb = convert_coordinates((width,height), b, normalize = False)
                 f.write(classid + " " + " ".join([("%.6f" % a) for a in bb]) + '\n')
 
         print ("wrote %s" % fname_out)
@@ -159,6 +170,3 @@ def show_preds(dict_preds: Dict, labeldict, rootpath = './data/test2/Japan/image
         ax.imshow(img)
 
     return 'Done Outputting Bounding Box Image Visualizations'
-
-
-            
