@@ -12,7 +12,6 @@ import os
 import glob
 from os import walk
 
-
 #computer vision
 import cv2
 import torch
@@ -35,6 +34,11 @@ import PIL.Image as Image
 from typing import List, Dict
 
 import time 
+from matplotlib import rc
+import PIL.Image as Image
+
+import time 
+from os import walk
 
 def tdec(func):
     def inner(*args, **kwargs):
@@ -88,10 +92,6 @@ def check_img_labels_match(imgspath, labelspath, imgsextension, labelsextension,
     return images_not_in_labels, labels_not_in_images
 
 
-
-
-
-
 def convert_coordinates(size, box, normalize = True):
     dw = 1.0/size[0]
     dh = 1.0/size[1]
@@ -106,9 +106,9 @@ def convert_coordinates(size, box, normalize = True):
         h = h*dh
     return (x,y,w,h)
 
-# labelsdict,
+
 @tdec
-def convert_xml_to_yolo(path, labelsdict, extension = 'xml', xmlsdir = 'xmls', normalize = True):
+def convert_xml2yolo(path, labelsdict, extension = 'xml', xmlsdir = 'xmls', normalize = True):
     '''Inputs:
     extension: make sure to pass without any punctuation, i.e. India_0001.xml should be extension = 'xml' '''
 
@@ -132,6 +132,7 @@ def convert_xml_to_yolo(path, labelsdict, extension = 'xml', xmlsdir = 'xmls', n
                 try:    
                     classid =  labelsdict[(item.getElementsByTagName('name')[0]).firstChild.data]
                 except: classid = 0
+
                 # get bbox coordinates
                 xmin = ((item.getElementsByTagName('bndbox')[0]).getElementsByTagName('xmin')[0]).firstChild.data
                 ymin = ((item.getElementsByTagName('bndbox')[0]).getElementsByTagName('ymin')[0]).firstChild.data
