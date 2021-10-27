@@ -150,7 +150,7 @@ def convert_xml_to_yolo(path, labelsdict, extension = 'xml', xmlsdir = 'xmls', n
 
 
 @tdec
-def show_preds(dict_preds: Dict, labeldict, rootpath = './data/test2/Japan/images/images/') -> None:
+def show_preds(dict_preds: Dict, labeldict, rootpath = './data/test2/Japan/images/images/'):
     '''Function to show bounding box predictions on a set of images'''
     
     for img, labels in dict_preds.items():
