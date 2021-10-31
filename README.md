@@ -1,4 +1,21 @@
+## Hardware Overview 
+
+Hardware used: Nvidia RTX 3090
+* Given the RTX 3090 embeds Ampere architecture, it will only work with Nvidia Driver 450+ versions only.
+![image](https://user-images.githubusercontent.com/8759492/139563640-602d5dfb-48dc-44fa-b911-d9cbd0404671.png)
+https://docs.nvidia.com/deploy/cuda-compatibility/index.html
+* Given we can only work with Nvidia Driver versions 450+, we will require CUDA versions 11.0+ 
+![image](https://user-images.githubusercontent.com/8759492/139563706-be335ccb-c0e1-41cf-94b7-27c541c0adc1.png)
+https://docs.nvidia.com/deploy/cuda-compatibility/index.html
+* Given we can now only work with CUDA versions 11.0+, we will require cuDNN versions 8/0+ 
+https://docs.nvidia.com/deeplearning/cudnn/support-matrix/index.html
+
+
+See https://medium.com/@dun.chwong/the-simple-guide-deep-learning-with-rtx-3090-cuda-cudnn-tensorflow-keras-pytorch-e88a2a8249bc for more details 
+
+
 ## Object Detection Next Steps & Roadmap
+
 
 #### Philippe Next Steps:
 1. Investigate remaining imgaug augmentation transformations available and select subset most appropriate for task 
