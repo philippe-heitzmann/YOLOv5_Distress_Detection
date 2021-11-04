@@ -109,13 +109,17 @@ def convert_coordinates(size, box, normalize = True):
     return (x,y,w,h)
 
 # labelsdict,
-@tdec
+
+def test_func():
+    pass    
+
 def convert_xml_to_yolo(path, labelsdict, extension = 'xml', xmlsdir = 'xmls', normalize = True):
     '''Inputs:
     extension: make sure to pass without any punctuation, i.e. India_0001.xml should be extension = 'xml' '''
 
     files = [f for f in next(walk(path), (None, None, []))[2] if f.endswith(extension)] 
-    
+    unrecognized_classes = []
+
     for file in files:
         xmldoc = minidom.parse(path + os.sep + file)
         idx = len(extension) + 1
@@ -133,7 +137,10 @@ def convert_xml_to_yolo(path, labelsdict, extension = 'xml', xmlsdir = 'xmls', n
                 # get class label
                 try:    
                     classid =  labelsdict[(item.getElementsByTagName('name')[0]).firstChild.data]
-                except: classid = 0
+                except: 
+                    print('No entry for classID ', (item.getElementsByTagName('name')[0]).firstChild.data)
+                    unrecognized_classes.append((item.getElementsByTagName('name')[0]).firstChild.data)
+                    classid = 0
                 # get bbox coordinates
                 xmin = ((item.getElementsByTagName('bndbox')[0]).getElementsByTagName('xmin')[0]).firstChild.data
                 ymin = ((item.getElementsByTagName('bndbox')[0]).getElementsByTagName('ymin')[0]).firstChild.data
@@ -146,7 +153,8 @@ def convert_xml_to_yolo(path, labelsdict, extension = 'xml', xmlsdir = 'xmls', n
                 f.write(classid + " " + " ".join([("%.6f" % a) for a in bb]) + '\n')
 
         print ("wrote %s" % fname_out)
-    return 'Done creating txts from xmls in {}'.format(path.replace(xmlsdir, 'labels', 1))
+    print('Done creating txts from xmls in {}'.format(path.replace(xmlsdir, 'labels', 1)))
+    return unrecognized_classes
 
 
 @tdec
@@ -172,3 +180,21 @@ def show_preds(dict_preds: Dict, labeldict, rootpath = './data/test2/Japan/image
         ax.imshow(img)
 
     return 'Done Outputting Bounding Box Image Visualizations'
+
+
+def get_all_class_ids(*paths):
+
+    classes = set()
+    classesdict = Counter()
+    for path in paths:
+        files= get_files_in_dir(path = path, extension = 'txt', show_folders = False)
+        for file in files:
+            labelpath = path + os.sep + file
+            print(labelpath)
+            with open(labelpath) as labelfile:
+                lines = [line.rstrip() for line in labelfile.readlines()]
+                for line in lines:
+                    classid = line.split(' ')[0]
+                    classes.add(classid)
+                    classesdict[classid] += 1
+    return classes, classesdict
