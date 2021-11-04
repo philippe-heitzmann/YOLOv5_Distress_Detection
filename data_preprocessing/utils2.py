@@ -138,6 +138,7 @@ def convert_xml_to_yolo(path, labelsdict, extension = 'xml', xmlsdir = 'xmls', n
                 try:    
                     classid =  labelsdict[(item.getElementsByTagName('name')[0]).firstChild.data]
                 except: 
+                    print('Error')
                     print('No entry for classID ', (item.getElementsByTagName('name')[0]).firstChild.data)
                     unrecognized_classes.append((item.getElementsByTagName('name')[0]).firstChild.data)
                     classid = 0
