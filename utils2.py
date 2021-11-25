@@ -588,16 +588,16 @@ def get_results(path):
 
 def get_cmds(*tests, weights, nms_thresholds, conf_thresholds, counter = 0, m = 'm1'):
     newcmdlist = []
-    if m == 'm1':
-        detect = '/Users/Administrator/DS/IEEE-Big-Data-2020/yolov5/detect.py'
-        path = f'''\'/Users/Administrator/DS/IEEE-Big-Data-2020/yolov5/detect.py\''''
-    else:  
-        detect = '/Users/phil0/DS/IEEE/yolov5/detect.py'
-        path = f'''\'/Users/phil0/DS/IEEE/yolov5/runs/detect/exp{counter}\''''
     for nms in nms_thresholds:
         for conf in conf_thresholds:
             for test in tests:
-                newcmd = f''' #pass {counter}
+                if m == 'm1':
+                    detect = '/Users/Administrator/DS/IEEE-Big-Data-2020/yolov5/detect.py'
+                    path = f'''\'/Users/Administrator/DS/IEEE-Big-Data-2020/yolov5/detect.py\''''
+                else:  
+                    detect = '/Users/phil0/DS/IEEE/yolov5/detect.py'
+                    path = f'''\'/Users/phil0/DS/IEEE/yolov5/runs/detect/exp{counter}\''''
+                newcmd = f''' #pass {counter - 1}
 !python {detect} --weights {weights} --img 416 --source ./{test}/All_Countries/images --save-txt --save-conf --conf-thres {conf} --iou-thres {nms}  --agnostic-nms --augment \n
 import sys
 sys.path.append('/Users/Administrator/DS/IEEE-Big-Data-2020')
@@ -607,8 +607,8 @@ from importlib import reload
 reload(utils2)
 from utils2 import * \n
 dictdf = get_preds_txt(path = {path}, confidence=True)
-dictdf.to_csv('results/{test}_{counter}.txt', sep = ',', index = False, header = False)
-print(\'Completed pass {counter} on {test}\')
+dictdf.to_csv('results/{test}_{counter - 1}.txt', sep = ',', index = False, header = False)
+print(\'Completed pass {counter - 1} on {test}\')
 \n'''
                 newcmdlist.append(newcmd)
                 counter += 1
