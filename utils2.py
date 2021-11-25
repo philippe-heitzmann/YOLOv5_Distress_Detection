@@ -586,11 +586,31 @@ def get_results(path):
 
 
 
-def get_cmds(*tests, weights, nms_thresholds, conf_thresholds):
+def get_cmds(*tests, weights, nms_thresholds, conf_thresholds, counter = 0, m = 'm1'):
     newcmdlist = []
+    if m == 'm1':
+        detect = '/Users/Administrator/DS/IEEE-Big-Data-2020/yolov5/detect.py'
+        path = f'''\'/Users/Administrator/DS/IEEE-Big-Data-2020/yolov5/detect.py\''''
+    else:  
+        detect = '/Users/phil0/DS/IEEE/yolov5/detect.py'
+        path = f'''\'/Users/phil0/DS/IEEE/yolov5/runs/detect/exp{counter}\''''
     for nms in nms_thresholds:
         for conf in conf_thresholds:
             for test in tests:
-                newcmd = f'''!python /Users/Administrator/DS/IEEE-Big-Data-2020/yolov5/detect.py --weights {weights} --img 416 --source ./{test}/All_Countries/images --save-txt --save-conf --conf-thres {conf} --iou-thres {nms}  --agnostic-nms --augment '''
+                newcmd = f''' #pass {counter}
+!python {detect} --weights {weights} --img 416 --source ./{test}/All_Countries/images --save-txt --save-conf --conf-thres {conf} --iou-thres {nms}  --agnostic-nms --augment \n
+import sys
+sys.path.append('/Users/Administrator/DS/IEEE-Big-Data-2020')
+sys.path.append('/Users/phil0/DS/IEEE/Object_Detection')
+import utils2
+from importlib import reload
+reload(utils2)
+from utils2 import * \n
+dictdf = get_preds_txt(path = {path}, confidence=True)
+dictdf.to_csv('results/{test}_{counter}.txt', sep = ',', index = False, header = False)
+print(\'Completed pass {counter} on {test}\')
+\n'''
                 newcmdlist.append(newcmd)
+                counter += 1
+                
     return newcmdlist
