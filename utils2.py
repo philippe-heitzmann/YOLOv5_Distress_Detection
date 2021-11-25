@@ -480,9 +480,9 @@ def parseXML(xmlfile):
 
 def get_results(path):
     files, folders = get_files_in_dir(path, show_folders = True)
-    outdf = pd.DataFrame({'model_name':[], 'max_train_f1':[], 'bestepoch':[] ,'batch_size':[],'imgsz':[], 'max_train_recall':[], 'max_train_precision':[],'metrics/mAP_0.5':[], 'metrics/mAP_0.5:0.95':[], 'lr0':[], 'lrf':[], 'momentum':[], 'weight_decay':[], 'warmup_epochs':[],
+    outdf = pd.DataFrame({'modeltype':[], 'model_name':[], 'max_train_f1':[], 'bestepoch':[], 'maxepoch':[], 'percbest':[], 'epochs':[], 'batch_size':[],'imgsz':[], 'max_train_recall':[], 'max_train_precision':[],'metrics/mAP_0.5':[], 'metrics/mAP_0.5:0.95':[], 'lr0':[], 'lrf':[], 'momentum':[], 'weight_decay':[], 'warmup_epochs':[],
                           'warmup_momentum':[], 'warmup_bias_lr':[], 'box':[], 'cls':[], 'cls_pw':[], 'obj':[], 'obj_pw':[], 'iou_t':[], 'anchor_t':[], 'fl_gamma':[], 'hsv_h':[], 'hsv_s':[], 'hsv_v':[], 'degrees':[], 'translate':[], 
-                          'scale':[], 'shear':[], 'perspective':[], 'flipud':[], 'fliplr':[], 'mosaic':[], 'mixup':[], 'copy_paste':[], 'epochs':[],'rect':[],'resume':[],'nosave':[],'noval':[],'noautoanchor':[],'evolve':[],'bucket':[],'cache':[],'image_weights':[],'device':[],'multi_scale':[],'single_cls':[],'adam':[],'sync_bn':[],'workers':[],'project':[],'name':[],'exist_ok':[],'quad':[],'linear_lr':[],'label_smoothing':[],'patience':[],'freeze':[],'save_period':[],'local_rank':[],'entity':[],'upload_dataset':[],'bbox_interval':[],'artifact_alias':[],'save_dir':[]})
+                          'scale':[], 'shear':[], 'perspective':[], 'flipud':[], 'fliplr':[], 'mosaic':[], 'mixup':[], 'copy_paste':[], 'rect':[],'resume':[],'nosave':[],'noval':[],'noautoanchor':[],'evolve':[],'bucket':[],'cache':[],'image_weights':[],'device':[],'multi_scale':[],'single_cls':[],'adam':[],'sync_bn':[],'workers':[],'project':[],'name':[],'exist_ok':[],'quad':[],'linear_lr':[],'label_smoothing':[],'patience':[],'freeze':[],'save_period':[],'local_rank':[],'entity':[],'upload_dataset':[],'bbox_interval':[],'artifact_alias':[],'save_dir':[]}) # 'weights':[],
     for folder in folders:
         resultspath = path + os.sep + folder + '/results.csv'
         if not os.path.exists(resultspath):
@@ -536,10 +536,11 @@ def get_results(path):
         #optyaml
         optyaml = pd.read_csv(optpath, sep = ':', header = None)
         optyaml.columns = ['hyperparameter','value']
-        #weights = optyaml.loc[optyaml['hyperparameter'] == weights][['value']].iloc[0,0]
-        #cfg = optyaml.loc[optyaml['hyperparameter'] == cfg][['value']].iloc[0,0]
-        #data = optyaml.loc[optyaml['hyperparameter'] == data][['value']].iloc[0,0]
-        #hyp = optyaml.loc[optyaml['hyperparameter'] == hyp][['value']].iloc[0,0]
+        weights = optyaml.loc[optyaml['hyperparameter'] == 'weights'][['value']].iloc[0,0]
+        modeltype = weights.split('/')[-1].split('.')[0]
+        cfg = optyaml.loc[optyaml['hyperparameter'] == 'cfg'][['value']].iloc[0,0]
+        #data = optyaml.loc[optyaml['hyperparameter'] == 'data'][['value']].iloc[0,0]
+        #hyp = optyaml.loc[optyaml['hyperparameter'] == 'hyp'][['value']].iloc[0,0]
         epochs = optyaml.loc[optyaml['hyperparameter'] == 'epochs'][['value']].iloc[0,0]
         batch_size = optyaml.loc[optyaml['hyperparameter'] == 'batch_size'][['value']].iloc[0,0]
         imgsz = optyaml.loc[optyaml['hyperparameter'] == 'imgsz'][['value']].iloc[0,0]
@@ -574,11 +575,22 @@ def get_results(path):
         artifact_alias = optyaml.loc[optyaml['hyperparameter'] == 'artifact_alias'][['value']].iloc[0,0]
         save_dir = optyaml.loc[optyaml['hyperparameter'] == 'save_dir'][['value']].iloc[0,0]
 
-        newdf = pd.DataFrame({'model_name':[folder],'max_train_f1':[maxf1], 'bestepoch':[bestepoch], 'epochs':[epochs],'batch_size':[batch_size],'imgsz':[imgsz], 'max_train_recall':[maxrecall], 'max_train_precision':[maxprecision], 'metrics/mAP_0.5':[maxmAP_50], 'metrics/mAP_0.5:0.95':[maxmAP_5095], 
+        newdf = pd.DataFrame({'modeltype':[modeltype], 'model_name':[folder], 'max_train_f1':[maxf1], 'bestepoch':[bestepoch], 'maxepoch':[maxepoch], 'percbest': [bestepoch / maxepoch], 'epochs':[epochs],'batch_size':[batch_size],'imgsz':[imgsz], 'max_train_recall':[maxrecall], 'max_train_precision':[maxprecision], 'metrics/mAP_0.5':[maxmAP_50], 'metrics/mAP_0.5:0.95':[maxmAP_5095], 
                               'lr0':[lr0], 'lrf':[lrf], 'momentum':[momentum], 'weight_decay':[weight_decay], 'warmup_epochs':[warmup_epochs], 'warmup_momentum':[warmup_momentum], 'warmup_bias_lr':[warmup_bias_lr], 
                               'box':[box], 'cls':[cls], 'cls_pw':[cls_pw], 'obj':[obj], 'obj_pw':[obj_pw], 'iou_t':[iou_t], 'anchor_t':[anchor_t], 'fl_gamma':[fl_gamma], 'hsv_h':[hsv_h], 'hsv_s':[hsv_s], 'hsv_v':[hsv_v], 
                               'degrees':[degrees], 'translate':[translate], 'scale':[scale], 'shear':[shear], 'perspective':[perspective], 'flipud':[flipud], 'fliplr':[fliplr], 'mosaic':[mosaic], 'mixup':[mixup], 'copy_paste':[copy_paste],
-                             'rect':[rect],'resume':[resume],'nosave':[nosave],'noval':[noval],'noautoanchor':[noautoanchor],'evolve':[evolve],'bucket':[bucket],'cache':[cache],'image_weights':[image_weights],'device':[device],'multi_scale':[multi_scale],'single_cls':[single_cls],'adam':[adam],'sync_bn':[sync_bn],'workers':[workers],'project':[project],'name':[name],'exist_ok':[exist_ok],'quad':[quad],'linear_lr':[linear_lr],'label_smoothing':[label_smoothing],'patience':[patience],'freeze':[freeze],'save_period':[save_period],'local_rank':[local_rank],'entity':[entity],'upload_dataset':[upload_dataset],'bbox_interval':[bbox_interval],'artifact_alias':[artifact_alias],'save_dir':[save_dir]})
+                             'rect':[rect],'resume':[resume],'nosave':[nosave],'noval':[noval],'noautoanchor':[noautoanchor],'evolve':[evolve],'bucket':[bucket],'cache':[cache],'image_weights':[image_weights],'device':[device],'multi_scale':[multi_scale],'single_cls':[single_cls],'adam':[adam],'sync_bn':[sync_bn],'workers':[workers],'project':[project],'name':[name],'exist_ok':[exist_ok],'quad':[quad],'linear_lr':[linear_lr],'label_smoothing':[label_smoothing],'patience':[patience],'freeze':[freeze],'save_period':[save_period],'local_rank':[local_rank],'entity':[entity],'upload_dataset':[upload_dataset],'bbox_interval':[bbox_interval],'artifact_alias':[artifact_alias],'save_dir':[save_dir]}) #'weights':[weights],
         outdf = pd.concat([outdf, newdf], axis = 0)
         
     return outdf.sort_values(by = 'max_train_f1', ascending = False)
+
+
+
+def get_cmds(*tests, weights, nms_thresholds, conf_thresholds):
+    newcmdlist = []
+    for nms in nms_thresholds:
+        for conf in conf_thresholds:
+            for test in tests:
+                newcmd = f'''!python /Users/Administrator/DS/IEEE-Big-Data-2020/yolov5/detect.py --weights {weights} --img 416 --source ./{test}/All_Countries/images --save-txt --save-conf --conf-thres {conf} --iou-thres {nms}  --agnostic-nms --augment '''
+                newcmdlist.append(newcmd)
+    return newcmdlist
