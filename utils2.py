@@ -400,25 +400,28 @@ def get_preds_txt(path, confidence = False):
             with open(labelpath) as labelfile:
                 lines = [line.rstrip() for line in labelfile.readlines()]
                 newline = ''
-                for line in lines:
-                    if confidence:
-                        classid, xcenter, ycenter, box_width, box_height, conf = line.split(' ')
-                    else: classid, xcenter, ycenter, box_width, box_height = line.split(' ')
-                    if int(classid) > 3:
-                        continue
-                    else: classid = str(int(classid) + 1)
-                    try:
-                        xcenter, ycenter, box_width, box_height = float(xcenter), float(ycenter), float(box_width), float(box_height)
-                    except:
-                        #print('Error')
-                        errorcount += 1
-                    imwidth, imheight, colorchannels = cv2.imread(imagepath).shape
-                    xmin = np.round((xcenter - box_width / 2) * imwidth, 0)
-                    xmax = np.round((xcenter + box_width / 2) * imwidth, 0)
-                    ymin = np.round((ycenter - box_height / 2) * imheight, 0)
-                    ymax = np.round((ycenter + box_height / 2) * imheight, 0)
-                    newline += classid + ' ' + str(int(xmin)) + ' ' + str(int(ymin)) + ' ' + str(int(xmax)) + ' ' + str(int(ymax)) + ' ' 
-                dictdf[file] = newline
+                for idx, line in enumerate(lines):
+                    if idx > 4:
+                       continue
+                    else:
+                        if confidence:
+                            classid, xcenter, ycenter, box_width, box_height, conf = line.split(' ')
+                        else: classid, xcenter, ycenter, box_width, box_height = line.split(' ')
+                        if int(classid) > 3:
+                            continue
+                        else: classid = str(int(classid) + 1)
+                        try:
+                            xcenter, ycenter, box_width, box_height = float(xcenter), float(ycenter), float(box_width), float(box_height)
+                        except:
+                            #print('Error')
+                            errorcount += 1
+                        imwidth, imheight, colorchannels = cv2.imread(imagepath).shape
+                        xmin = np.round((xcenter - box_width / 2) * imwidth, 0)
+                        xmax = np.round((xcenter + box_width / 2) * imwidth, 0)
+                        ymin = np.round((ycenter - box_height / 2) * imheight, 0)
+                        ymax = np.round((ycenter + box_height / 2) * imheight, 0)
+                        newline += classid + ' ' + str(int(xmin)) + ' ' + str(int(ymin)) + ' ' + str(int(xmax)) + ' ' + str(int(ymax)) + ' ' 
+                        dictdf[file] = newline
         except:
             #print('No Labels')
             dictdf[file] = ''
@@ -593,11 +596,11 @@ def get_cmds(*tests, weights, nms_thresholds, conf_thresholds, counter = 0, m = 
             for test in tests:
                 if m == 'm1':
                     detect = '/Users/Administrator/DS/IEEE-Big-Data-2020/yolov5/detect.py'
-                    path = f'''\'/Users/Administrator/DS/IEEE-Big-Data-2020/yolov5/detect.py\''''
+                    path = f'''\'/Users/Administrator/DS/IEEE-Big-Data-2020/yolov5/runs/detect/exp{counter}\''''
                 else:  
                     detect = '/Users/phil0/DS/IEEE/yolov5/detect.py'
                     path = f'''\'/Users/phil0/DS/IEEE/yolov5/runs/detect/exp{counter}\''''
-                newcmd = f''' #pass {counter - 1}
+                newcmd = f''' #pass {counter - 1} nms = {nms} conf = {conf} {test}
 !python {detect} --weights {weights} --img 416 --source ./{test}/All_Countries/images --save-txt --save-conf --conf-thres {conf} --iou-thres {nms}  --agnostic-nms --augment \n
 import sys
 sys.path.append('/Users/Administrator/DS/IEEE-Big-Data-2020')
@@ -607,7 +610,7 @@ from importlib import reload
 reload(utils2)
 from utils2 import * \n
 dictdf = get_preds_txt(path = {path}, confidence=True)
-dictdf.to_csv('results/{test}_{counter - 1}.txt', sep = ',', index = False, header = False)
+dictdf.to_csv('results/{test}_nms{int(np.round(nms * 100, 0))}_conf{int(np.round(conf*100,0))}_pass{counter - 1}.txt', sep = ',', index = False, header = False)
 print(\'Completed pass {counter - 1} on {test}\')
 \n'''
                 newcmdlist.append(newcmd)
