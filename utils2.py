@@ -182,6 +182,46 @@ def convert_xml_to_yolo(path, labelsdict, extension = 'xml', xmlsdir = 'xmls', n
     return unrecognized_classes
 
 
+def xml_to_csv(path, labelsdict):
+    xml_list = []
+    
+    for xml_file in glob.glob(path + '/*.xml'):
+        xmldoc = minidom.parse(xml_file)
+        filename = xml_file.split('/')[-1].replace('xml','jpg')
+        #xmldoc.getElementsByTagName('filename')[0].text
+        itemlist = xmldoc.getElementsByTagName('object')
+        size = xmldoc.getElementsByTagName('size')[0]
+        width = int((size.getElementsByTagName('width')[0]).firstChild.data)
+        height = int((size.getElementsByTagName('height')[0]).firstChild.data)
+        for item in itemlist:
+            try:    
+                classid = item.getElementsByTagName('name')[0].firstChild.data
+                if classid not in labelsdict:
+                    continue
+                classid = labelsdict[classid]
+            except: 
+                continue
+            # get bbox coordinates
+            xmin = ((item.getElementsByTagName('bndbox')[0]).getElementsByTagName('xmin')[0]).firstChild.data
+            ymin = ((item.getElementsByTagName('bndbox')[0]).getElementsByTagName('ymin')[0]).firstChild.data
+            xmax = ((item.getElementsByTagName('bndbox')[0]).getElementsByTagName('xmax')[0]).firstChild.data
+            ymax = ((item.getElementsByTagName('bndbox')[0]).getElementsByTagName('ymax')[0]).firstChild.data
+        
+            value = (filename,
+                     width,
+                     height,
+                     classid,
+                     xmin,
+                     ymin,
+                     xmax,
+                     ymax
+                     )
+            xml_list.append(value)
+    column_name = ['filename', 'width', 'height', 'class', 'xmin', 'ymin', 'xmax', 'ymax']
+    xml_df = pd.DataFrame(xml_list, columns=column_name)
+    return xml_df
+
+
 @tdec
 def show_preds(dict_preds: Dict, labeldict, rootpath = './data/test2/Japan/images/images/'):
     '''Function to show bounding box predictions on a set of images'''
@@ -401,27 +441,27 @@ def get_preds_txt(path, confidence = False):
                 lines = [line.rstrip() for line in labelfile.readlines()]
                 newline = ''
                 for idx, line in enumerate(lines):
-                    if idx > 4:
-                       continue
-                    else:
-                        if confidence:
-                            classid, xcenter, ycenter, box_width, box_height, conf = line.split(' ')
-                        else: classid, xcenter, ycenter, box_width, box_height = line.split(' ')
-                        if int(classid) > 3:
-                            continue
-                        else: classid = str(int(classid) + 1)
-                        try:
-                            xcenter, ycenter, box_width, box_height = float(xcenter), float(ycenter), float(box_width), float(box_height)
-                        except:
-                            #print('Error')
-                            errorcount += 1
-                        imwidth, imheight, colorchannels = cv2.imread(imagepath).shape
-                        xmin = np.round((xcenter - box_width / 2) * imwidth, 0)
-                        xmax = np.round((xcenter + box_width / 2) * imwidth, 0)
-                        ymin = np.round((ycenter - box_height / 2) * imheight, 0)
-                        ymax = np.round((ycenter + box_height / 2) * imheight, 0)
-                        newline += classid + ' ' + str(int(xmin)) + ' ' + str(int(ymin)) + ' ' + str(int(xmax)) + ' ' + str(int(ymax)) + ' ' 
-                        dictdf[file] = newline
+#                     if idx > 4:
+#                        continue
+#                     else:
+                    if confidence:
+                        classid, xcenter, ycenter, box_width, box_height, conf = line.split(' ')
+                    else: classid, xcenter, ycenter, box_width, box_height = line.split(' ')
+                    if int(classid) > 3:
+                        continue
+                    else: classid = str(int(classid) + 1)
+                    try:
+                        xcenter, ycenter, box_width, box_height = float(xcenter), float(ycenter), float(box_width), float(box_height)
+                    except:
+                        #print('Error')
+                        errorcount += 1
+                    imwidth, imheight, colorchannels = cv2.imread(imagepath).shape
+                    xmin = np.round((xcenter - box_width / 2) * imwidth, 0)
+                    xmax = np.round((xcenter + box_width / 2) * imwidth, 0)
+                    ymin = np.round((ycenter - box_height / 2) * imheight, 0)
+                    ymax = np.round((ycenter + box_height / 2) * imheight, 0)
+                    newline += classid + ' ' + str(int(xmin)) + ' ' + str(int(ymin)) + ' ' + str(int(xmax)) + ' ' + str(int(ymax)) + ' ' 
+                    dictdf[file] = newline
         except:
             #print('No Labels')
             dictdf[file] = ''
