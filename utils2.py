@@ -657,3 +657,37 @@ print(\'Completed pass {counter - 1} on {test}\')
                 counter += 1
                 
     return newcmdlist
+
+
+
+#### General Torch Functions ####
+
+from torchvision.models.detection.faster_rcnn import FastRCNNPredictor
+
+def get_model(num_classes):
+    # load an object detection model pre-trained on COCO
+    model = torchvision.models.detection.\
+           fasterrcnn_resnet50_fpn(pretrained=True)
+    # get the number of input features for the classifier
+    in_features = model.roi_heads.box_predictor.cls_score.in_features
+    # replace the pre-trained head with a new one
+    model.roi_heads.box_predictor = FastRCNNPredictor(in_features, num_classes)
+   
+    return model
+
+
+def get_transform(train = False):
+    transforms = []
+    # converts the image, a PIL image, into a PyTorch Tensor
+    transforms.append(T.ToTensor())
+    if train:
+        # during training, randomly flip the training images
+        # and ground-truth for data augmentation
+        transforms.append(T.RandomHorizontalFlip(0.5))
+    return T.Compose(transforms)
+
+
+def load_torch_model(weights_path, num_classes):    
+    loaded_model = get_model(num_classes = num_classes)
+    loaded_model.load_state_dict(torch.load(weights_path))
+    return loaded_model
