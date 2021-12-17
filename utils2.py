@@ -53,7 +53,7 @@ def tdec(func):
     def inner(*args, **kwargs):
         start_time = time.time()
         result = func(*args, **kwargs)
-        print('{} sec to complete'.format(np.round(time.time() - start_time, 1)))
+        print('{} sec to complete {}'.format(np.round(time.time() - start_time, 1), func))
         return result
     return inner 
 
@@ -221,6 +221,19 @@ def xml_to_csv(path, labelsdict):
     xml_df = pd.DataFrame(xml_list, columns=column_name)
     return xml_df
 
+@tdec
+def jpg_to_csv(path):
+    imgs = get_files_in_dir(path = path, extension = 'jpg', show_folders = False, fullpath = False)
+    outlist = []
+    for img in imgs:
+        pil_image = PIL.Image.open(path + os.sep + img)
+        imgwidth, imgheight = pil_image.size
+        classid, xmin, ymin, xmax, ymax = 1,0,0,1,1
+        value = (img, imgwidth, imgheight, classid, xmin, ymin, xmax, ymax)
+        outlist.append(value)
+    column_name = ['filename', 'width', 'height', 'class', 'xmin', 'ymin', 'xmax', 'ymax']
+    outdf = pd.DataFrame(outlist, columns=column_name)
+    return outdf    
 
 @tdec
 def show_preds(dict_preds: Dict, labeldict, rootpath = './data/test2/Japan/images/images/'):
@@ -467,8 +480,8 @@ def get_preds_txt(path, confidence = False):
             dictdf[file] = ''
             continue
     print('Errorcount: ', errorcount)
-    newdf = pd.DataFrame.from_dict(dictdf, orient = 'index').reset_index()
-    return newdf
+    outdf = pd.DataFrame.from_dict(dictdf, orient = 'index').reset_index()
+    return outdf
 
 
 @tdec
@@ -663,6 +676,7 @@ print(\'Completed pass {counter - 1} on {test}\')
 #### General Torch Functions ####
 
 from torchvision.models.detection.faster_rcnn import FastRCNNPredictor
+import transforms as T
 
 def get_model(num_classes):
     # load an object detection model pre-trained on COCO
@@ -691,3 +705,97 @@ def load_torch_model(weights_path, num_classes):
     loaded_model = get_model(num_classes = num_classes)
     loaded_model.load_state_dict(torch.load(weights_path))
     return loaded_model
+
+
+
+
+def parse_one_annot(path_to_data_file, filename):
+    data = pd.read_csv(path_to_data_file)
+    boxes_array = data[data["filename"] == filename][["xmin", "ymin","xmax", "ymax"]].values
+    return boxes_array
+
+class IEEEDataset(torch.utils.data.Dataset):
+   
+    def __init__(self, root, data_file, transforms=None):
+        self.root = root
+        self.transforms = transforms
+        self.imgs = sorted(os.listdir(os.path.join(root, "images")))
+        self.path_to_data_file = data_file
+
+    def __getitem__(self, idx):
+          # load images and bounding boxes
+        img_path = os.path.join(self.root, "images", self.imgs[idx])
+        img = Image.open(img_path).convert("RGB")
+        box_list = parse_one_annot(self.path_to_data_file, self.imgs[idx])
+        boxes = torch.as_tensor(box_list, dtype=torch.float32)
+    
+        num_objs = len(box_list)
+        # there is only one class
+        labels = torch.ones((num_objs,), dtype=torch.int64)
+        image_id = torch.tensor([idx])
+        area = (boxes[:, 3] - boxes[:, 1]) * (boxes[:, 2] - boxes[:,0])
+        # suppose all instances are not crowd
+        iscrowd = torch.zeros((num_objs,), dtype=torch.int64)
+        target = {}
+        target["boxes"] = boxes
+        target["labels"] = labels
+        target["image_id"] = image_id
+        target["area"] = area
+        target["iscrowd"] = iscrowd
+
+        if self.transforms is not None:
+            img, target = self.transforms(img, target)
+        return img, target, self.imgs[idx]
+    
+    def __len__(self):
+        return len(self.imgs)
+    
+    
+from PIL import ImageDraw
+
+@tdec
+def get_rcnn_preds(dataset_test, loaded_model):
+    dictdf = {}
+    for idx in range(len(dataset_test)):
+        start_time = time.time()
+        img, _, file = dataset_test[idx]
+        label_boxes = np.array(dataset_test[idx][1]["boxes"])
+        #put the model in evaluation mode
+        loaded_model.eval()
+        with torch.no_grad():
+            prediction = loaded_model([img])
+            predstr = ''
+            for box, label, conf in zip(prediction[0]['boxes'], prediction[0]['labels'], prediction[0]['scores']):
+                xmin = str(int(np.round(box[0].item(), 0)))
+                xmax = str(int(np.round(box[1].item(), 0)))
+                ymin = str(int(np.round(box[2].item(), 0)))
+                ymax = str(int(np.round(box[3].item(), 0)))
+                label = str(label.item())
+                outputstr = label + ' ' + xmin + ' ' + ymin + ' ' + xmax + ' ' + ymax + ' '
+                if outputstr is None: outputstr = ''
+                print(file, outputstr)
+                predstr += outputstr
+        print('{}s to predict'.format(np.round(time.time() - start_time, 1)))
+        dictdf[file] = predstr
+    outdf = pd.DataFrame.from_dict(dictdf, orient = 'index').reset_index()
+    return outdf
+
+
+@tdec
+def inters_counter(list1, list2):
+    counter = 0
+    for item in list1:
+        if item in list2:
+            counter += 1
+    return counter
+
+
+@tdec
+def get_dataset_filenames(*args, datasetobj, **kwargs):
+    filenames = []
+    print(len(datasetobj))
+    for i in range(len(datasetobj)):
+        img, target, filename = datasetobj[i]
+        print(filename)
+        filenames.append(filename)
+    return filenames
