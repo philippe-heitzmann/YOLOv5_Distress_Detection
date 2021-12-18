@@ -764,20 +764,25 @@ def get_rcnn_preds(dataset_test, loaded_model):
         loaded_model.eval()
         with torch.no_grad():
             prediction = loaded_model([img])
-            predstr = ''
+            #predstr = ''
+            counter = 0
             for box, label, conf in zip(prediction[0]['boxes'], prediction[0]['labels'], prediction[0]['scores']):
                 xmin = str(int(np.round(box[0].item(), 0)))
-                xmax = str(int(np.round(box[1].item(), 0)))
-                ymin = str(int(np.round(box[2].item(), 0)))
+                ymin = str(int(np.round(box[1].item(), 0)))
+                xmax = str(int(np.round(box[2].item(), 0)))
                 ymax = str(int(np.round(box[3].item(), 0)))
                 label = str(label.item())
+                conf = float(conf.item())
                 outputstr = label + ' ' + xmin + ' ' + ymin + ' ' + xmax + ' ' + ymax + ' '
                 if outputstr is None: outputstr = ''
-                print(file, outputstr)
-                predstr += outputstr
+                print(file, outputstr, conf)
+                #predstr += outputstr
+                keyn = file + '_' + str(counter)
+                dictdf[keyn] = [outputstr, conf]
+                counter += 1
         print('{}s to predict'.format(np.round(time.time() - start_time, 1)))
-        dictdf[file] = predstr
     outdf = pd.DataFrame.from_dict(dictdf, orient = 'index').reset_index()
+    outdf.columns = ['filename', 'prediction', 'conf'] 
     return outdf
 
 
