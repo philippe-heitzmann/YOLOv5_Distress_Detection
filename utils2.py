@@ -179,6 +179,25 @@ def convert_xml_to_yolo(path, labelsdict, extension = 'xml', xmlsdir = 'xmls', n
     return unrecognized_classes
 
 
+def get_xml_info(xmlpath):
+    xmldoc = minidom.parse(xmlpath)
+    filename = xmldoc.getElementsByTagName('filename')[0].firstChild.nodeValue
+    itemlist = xmldoc.getElementsByTagName('object')
+    size = xmldoc.getElementsByTagName('size')[0]
+    width = int((size.getElementsByTagName('width')[0]).firstChild.data)
+    height = int((size.getElementsByTagName('height')[0]).firstChild.data)
+    boxes = []
+    for item in itemlist:
+        classid = item.getElementsByTagName('name')[0].firstChild.data
+        # get bbox coordinates
+        xmin = ((item.getElementsByTagName('bndbox')[0]).getElementsByTagName('xmin')[0]).firstChild.data
+        ymin = ((item.getElementsByTagName('bndbox')[0]).getElementsByTagName('ymin')[0]).firstChild.data
+        xmax = ((item.getElementsByTagName('bndbox')[0]).getElementsByTagName('xmax')[0]).firstChild.data
+        ymax = ((item.getElementsByTagName('bndbox')[0]).getElementsByTagName('ymax')[0]).firstChild.data
+        boxes.append([classid, xmin, ymin, xmax, ymax])
+    return filename, width, height, boxes
+
+
 def xml_to_csv(path, labelsdict):
     xml_list = []
     
@@ -256,19 +275,41 @@ def show_preds(dict_preds: Dict, labeldict, rootpath = './data/test2/Japan/image
 
     return 'Done Outputting Bounding Box Image Visualizations'
 
-
-def get_all_class_ids(path):
+@tdec
+def get_all_class_ids(path, extension, show_country = False):
     classes = set()
     classesdict = defaultdict(int)
-    paths = get_files_in_dir(path = path, extension = 'txt', show_folders = False, fullpath = True)
+    paths = get_files_in_dir(path = path, extension = extension, show_folders = False, fullpath = True)
+    empty_images = 0
     for file in paths:
-        with open(file) as labelfile:
-            lines = [line.rstrip() for line in labelfile.readlines()]
-            for line in lines:
-                classid = line.split(' ')[0]
-                classes.add(classid)
+        if show_country:
+            country = file.split('/')[-1].split('_')[0]
+        if extension == 'txt':
+            with open(file) as labelfile:
+                lines = [line.rstrip() for line in labelfile.readlines()]
+                if len(lines) == 0:
+                    empty_images += 1
+                for line in lines:
+                    classid = line.split(' ')[0]
+                    classes.add(classid)
+                    if show_country:
+                        keyn = country + '_' + str(classid)
+                        classesdict[keyn] += 1
+                        continue
+                    classesdict[classid] += 1
+        elif extension == 'xml':
+            filename, width, height, boxes = get_xml_info(file)
+            if len(boxes) == 0:
+                empty_images += 1
+            for box in boxes:
+                classes.add(box[0])
+                if show_country:
+                    keyn = country + '_' + str(box[0])
+                    classesdict[keyn] += 1
+                    continue
                 classesdict[classid] += 1
-    return classes, classesdict
+        
+    return classes, classesdict, empty_images
 
 
 def show_labels(imagepath, **kwargs):
@@ -281,7 +322,6 @@ def show_labels(imagepath, **kwargs):
     fig, ax = plt.subplots(figsize = (9,9))
     #show the image
     ax.imshow(pil_image)
-
     with open(labelpath) as labelfile:
         #labelpath are .txt yolo annotation format label files in format <predicted object-class> <xcenter of bounding box (normalized by image width)> <ycenter of bounding box (normalized by image height)> <box width (normalized by image width)> <box height (normalized by image height)>
         #convert to PASCAL VOC format xmin, ymin, xmax, ymax
@@ -289,11 +329,10 @@ def show_labels(imagepath, **kwargs):
         if len(lines) > 0:
             for label in lines:
                 lb = label.split(' ')[0]
-                if 'labelsdict' in kwargs:
-                    labelsdict = kwargs['labelsdict']
+                if 'labelsdict' in kwargs and lb in kwargs['labelsdict']:
                     try:
-                        lb = labelsdict[lb]
-                    except: pass
+                        lb = kwargs['labelsdict'][lb]
+                    except: continue
                 xcenter, ycenter, box_width, box_height = [float(i) for i in label.split(' ')[1:]] 
                 xmin = (xcenter - box_width / 2) * imgwidth
                 xmax = (xcenter + box_width / 2) * imgwidth
@@ -310,7 +349,9 @@ def show_labels(imagepath, **kwargs):
 
 def wrapper_show_labels(imagedir, start = 0, end = 10, **kwargs):
     imagepaths = get_files_in_dir(path = imagedir, extension = 'jpg', **kwargs)
+    
     for imagepath in imagepaths[start:end]:
+        #print(imagepath)
         show_labels(imagepath = imagepath, **kwargs)
 
 
@@ -912,12 +953,32 @@ from engine import train_one_epoch, evaluate
 import utils
 import transforms as T
 
+def get_dataloaders(idx_cutoff, train_batch_size, root, data_file, num_workers = 0):
+    # use our dataset and defined transformations
+    dataset = TorchDataset(root=root,  data_file=data_file, transforms = None)
+    dataset_test = TorchDataset(root=root, data_file=data_file, transforms = None)
+    # split the dataset in train and test set
+    torch.manual_seed(1)
+    indices = torch.randperm(len(dataset)).tolist()
+    # valindices = torch.randperm(valmask).tolist()
+    # trainindices = torch.randperm(trainmask).tolist()
+    dataset = torch.utils.data.Subset(dataset, indices[:-idx_cutoff])
+    dataset_test = torch.utils.data.Subset(dataset_test, indices[-idx_cutoff:])
+    # define training and validation data loaders
+    data_loader = torch.utils.data.DataLoader(
+                  dataset, batch_size=train_batch_size, shuffle=True, num_workers=num_workers,
+                  collate_fn=utils.collate_fn)
+    data_loader_test = torch.utils.data.DataLoader(
+             dataset_test, batch_size=1, shuffle=False, num_workers=num_workers,
+             collate_fn=utils.collate_fn)
+    print("We have: {} examples, {} are training and {} testing".format(len(indices), len(dataset), len(dataset_test)))
+    return dataset, dataset_test, data_loader, data_loader_test
 
 
 def train_fastrcnn(num_epochs, model, optimizer, lr_scheduler, data_loader_train, data_loader_val, device, print_freq = 50, save_every = 10, output_weights_file = 'train/weights/model_1218_fastrcnn_{}e'):
     
     for idx, epoch in enumerate(range(num_epochs)):
-        if idx % save_every == 0:
+        if (idx != 0) & (idx % save_every == 0):
             torch.save(model.state_dict(), output_weights_file.format(idx))
         # train for one epoch, printing every print_freq iterations
         train_one_epoch(model, optimizer, data_loader_train, device, epoch, print_freq)
