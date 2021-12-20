@@ -914,7 +914,7 @@ import transforms as T
 
 
 
-def train_fastrcnn(num_epochs, model, optimizer, data_loader_train, data_loader_val, device, print_freq = 50, save_every = 10, output_weights_file = 'train/weights/model_1218_fastrcnn_{}e'):
+def train_fastrcnn(num_epochs, model, optimizer, lr_scheduler, data_loader_train, data_loader_val, device, print_freq = 50, save_every = 10, output_weights_file = 'train/weights/model_1218_fastrcnn_{}e'):
     
     for idx, epoch in enumerate(range(num_epochs)):
         if idx % save_every == 0:
