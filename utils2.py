@@ -351,6 +351,7 @@ def wrapper_show_labels(imagedir, start = 0, end = 10, **kwargs):
     imagepaths = get_files_in_dir(path = imagedir, extension = 'jpg', **kwargs)
     
     for imagepath in imagepaths[start:end]:
+        print(imagepath)
         #print(imagepath)
         show_labels(imagepath = imagepath, **kwargs)
 
