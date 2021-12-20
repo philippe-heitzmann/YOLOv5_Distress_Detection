@@ -867,6 +867,40 @@ def dropcol(df):
     return df
 
 
+class TorchDataset(torch.utils.data.Dataset):
+    def __init__(self, root, data_file, transforms=None):
+        self.root = root
+        self.transforms = transforms
+        self.imgs = sorted(os.listdir(os.path.join(root, "images")))
+        self.path_to_data_file = data_file
+    def __getitem__(self, idx):
+       # load images and bounding boxes
+        img_path = os.path.join(self.root, "images", self.imgs[idx])
+        img = Image.open(img_path).convert("RGB")
+        box_list = parse_one_annot(self.path_to_data_file, self.imgs[idx])
+        boxes = torch.as_tensor(box_list, dtype=torch.float32)
+        num_objs = len(box_list)
+        # pulling labels for each image 
+        labels_list = parse_labels(self.path_to_data_file, self.imgs[idx])
+        labels = torch.as_tensor(labels_list, dtype=torch.int64) 
+        #labels = torch.ones((num_objs,), dtype=torch.int64)
+        image_id = torch.tensor([idx])
+        area = (boxes[:, 3] - boxes[:, 1]) * (boxes[:, 2] - boxes[:,0])
+        # suppose all instances are not crowd
+        iscrowd = torch.zeros((num_objs,), dtype=torch.int64)
+        target = {}
+        target["boxes"] = boxes
+        target["labels"] = labels
+        target["image_id"] = image_id
+        target["area"] = area
+        target["iscrowd"] = iscrowd
+        transform = torchvision.transforms.Compose([torchvision.transforms.ToTensor()])
+        if self.transforms is not None:
+            img, target = torchvision.transforms.Compose([torchvision.transforms.ToTensor()])(img, target)
+        return transform(img), target
+    def __len__(self):
+        return len(self.imgs)
+
 import os
 import numpy as np
 import torch
