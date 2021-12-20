@@ -47,7 +47,8 @@ import csv
 import requests
 import xml.etree.ElementTree as ET
   
-
+import sys
+sys.path.append('/Users/Administrator/DS/IEEE-Big-Data-2020')
 
 def tdec(func):
     def inner(*args, **kwargs):
@@ -115,10 +116,6 @@ def check_img_labels_match(imgspath, labelspath, imgsextension, labelsextension,
     else: print('All specified label IDs found in images folder')
     
     return images_not_in_labels, labels_not_in_images
-
-
-
-
 
 
 def convert_coordinates(size, box, normalize = True):
@@ -260,21 +257,17 @@ def show_preds(dict_preds: Dict, labeldict, rootpath = './data/test2/Japan/image
     return 'Done Outputting Bounding Box Image Visualizations'
 
 
-def get_all_class_ids(*paths):
-
+def get_all_class_ids(path):
     classes = set()
-    classesdict = Counter()
-    for path in paths:
-        files= get_files_in_dir(path = path, extension = 'txt', show_folders = False)
-        for file in files:
-            labelpath = path + os.sep + file
-            print(labelpath)
-            with open(labelpath) as labelfile:
-                lines = [line.rstrip() for line in labelfile.readlines()]
-                for line in lines:
-                    classid = line.split(' ')[0]
-                    classes.add(classid)
-                    classesdict[classid] += 1
+    classesdict = defaultdict(int)
+    paths = get_files_in_dir(path = path, extension = 'txt', show_folders = False, fullpath = True)
+    for file in paths:
+        with open(file) as labelfile:
+            lines = [line.rstrip() for line in labelfile.readlines()]
+            for line in lines:
+                classid = line.split(' ')[0]
+                classes.add(classid)
+                classesdict[classid] += 1
     return classes, classesdict
 
 
@@ -714,6 +707,12 @@ def parse_one_annot(path_to_data_file, filename):
     boxes_array = data[data["filename"] == filename][["xmin", "ymin","xmax", "ymax"]].values
     return boxes_array
 
+def parse_labels(path_to_data_file, filename):
+    data = pd.read_csv(path_to_data_file)
+    labels_array = data[data["filename"] == filename][["class"]].values
+    labels_array = [item for sublist in labels_array for item in sublist]
+    return labels_array
+
 class IEEEDataset(torch.utils.data.Dataset):
    
     def __init__(self, root, data_file, transforms=None):
@@ -726,12 +725,22 @@ class IEEEDataset(torch.utils.data.Dataset):
           # load images and bounding boxes
         img_path = os.path.join(self.root, "images", self.imgs[idx])
         img = Image.open(img_path).convert("RGB")
+#         pil_to_tensor = T.ToTensor()(img).unsqueeze_(0)
+#         print(pil_to_tensor.shape) 
+#         print(type(pil_to_tensor))
+#         print(pil_to_tensor)
+# tensor_to_pil = transforms.ToPILImage()(pil_to_tensor.squeeze_(0))
+# print(tensor_to_pil.size)
+#         print(img)
+
         box_list = parse_one_annot(self.path_to_data_file, self.imgs[idx])
-        boxes = torch.as_tensor(box_list, dtype=torch.float32)
-    
+        boxes = torch.as_tensor(box_list, dtype=torch.float32)    
         num_objs = len(box_list)
         # there is only one class
-        labels = torch.ones((num_objs,), dtype=torch.int64)
+        #labels = torch.ones((num_objs,), dtype=torch.int64)
+        labels_list = parse_labels(self.path_to_data_file, self.imgs[idx])
+        labels = torch.as_tensor(labels_list, dtype=torch.int64)   
+        print('Labels are', labels)
         image_id = torch.tensor([idx])
         area = (boxes[:, 3] - boxes[:, 1]) * (boxes[:, 2] - boxes[:,0])
         # suppose all instances are not crowd
@@ -742,10 +751,11 @@ class IEEEDataset(torch.utils.data.Dataset):
         target["image_id"] = image_id
         target["area"] = area
         target["iscrowd"] = iscrowd
-
+        #target["imagefile"] = self.imgs[idx]
+        
         if self.transforms is not None:
             img, target = self.transforms(img, target)
-        return img, target, self.imgs[idx]
+        return img, target
     
     def __len__(self):
         return len(self.imgs)
@@ -804,3 +814,80 @@ def get_dataset_filenames(*args, datasetobj, **kwargs):
         print(filename)
         filenames.append(filename)
     return filenames
+
+
+def filter_preds(df, conf_threshold, testu):
+    df = df.loc[df['conf'] > conf_threshold]
+    df['filename2'] = df['filename'].str.split('_')
+    df['filename2'] = df['filename2'].str[0:2]
+    df['filename2'] = ['_'.join(map(str, l)) for l in df['filename2']]
+    df['preds2'] = df.groupby(['filename2'])['prediction'].transform(lambda x: ''.join(x))
+    df = df.drop_duplicates(subset = ['filename2', 'preds2'], keep = 'first')
+    df = df.drop(['filename', 'prediction', 'conf', 'labels'], axis = 1)
+    filenameu = df['filename2'].unique()
+    dictdf = {}
+    for fileu in testu:
+        if fileu not in filenameu:
+            dictdf[fileu] = ''
+    newdf = pd.DataFrame.from_dict(dictdf, orient = 'index').reset_index()
+    newdf.columns = ['filename2','preds2']
+    df = pd.concat([df, newdf], axis = 0)        
+    return df
+
+
+def visualize_rcnn(idxs, dataset_test, loaded_model, conf_threshold = 0.01, groundtruth = False):
+    for idx in idxs:
+        img, target, filename = dataset_test[idx]
+        print(filename)
+        loaded_model.eval()
+        with torch.no_grad():
+            prediction = loaded_model([img])
+        image = Image.fromarray(img.mul(255).permute(1, 2,0).byte().numpy())
+        draw = ImageDraw.Draw(image)
+        if groundtruth:
+            label_boxes = dataset_test[idx][1]
+            for i in range(len(label_boxes['boxes'])):
+                draw.rectangle([(label_boxes['boxes'][i][0].item(), label_boxes['boxes'][i][1].item()), (label_boxes['boxes'][i][2].item(), label_boxes['boxes'][i][3].item())], outline ="green", width = 3)
+                draw.text((label_boxes['boxes'][i][0].item(), label_boxes['boxes'][i][3].item() + 5), text = str(label_boxes['labels'][i].item()), fill = 'green')
+        for element in range(len(prediction[0]["boxes"])):
+            boxes = prediction[0]["boxes"][element].cpu().numpy()
+            score = np.round(prediction[0]["scores"][element].cpu().numpy(),
+                            decimals= 4)
+            if score > conf_threshold:
+               draw.rectangle([(boxes[0], boxes[1]), (boxes[2], boxes[3])], outline ="red", width =3)
+               pred_label = str(prediction[0]['labels'][element].item()) + ' ' + str(score) 
+               draw.text((boxes[0], boxes[1] - 10), text = pred_label, fill = 'red')
+        image.show()
+    return image
+
+def dropcol(df):
+    try:
+        df = df.drop(['Unnamed: 0'], axis = 1)
+    except: print('Could not drop Unnamed: 0 col')
+    return df
+
+
+import os
+import numpy as np
+import torch
+import torch.utils.data
+from PIL import Image
+import pandas as pd
+from torchvision.models.detection.faster_rcnn import FastRCNNPredictor
+from engine import train_one_epoch, evaluate
+import utils
+import transforms as T
+
+
+
+def train_fastrcnn(num_epochs, model, optimizer, data_loader_train, data_loader_val, device, print_freq = 50, save_every = 10, output_weights_file = 'train/weights/model_1218_fastrcnn_{}e'):
+    
+    for idx, epoch in enumerate(range(num_epochs)):
+        if idx % save_every == 0:
+            torch.save(model.state_dict(), output_weights_file.format(idx))
+        # train for one epoch, printing every print_freq iterations
+        train_one_epoch(model, optimizer, data_loader_train, device, epoch, print_freq)
+        # update the learning rate
+        lr_scheduler.step()
+        # evaluate on the test dataset
+        evaluate(model, data_loader_val, device=device)
