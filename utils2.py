@@ -822,6 +822,7 @@ def get_rcnn_preds(dataset_test, loaded_model):
             prediction = loaded_model([img])
             #predstr = ''
             counter = 0
+            predictions = 0
             for box, label, conf in zip(prediction[0]['boxes'], prediction[0]['labels'], prediction[0]['scores']):
                 xmin = str(int(np.round(box[0].item(), 0)))
                 ymin = str(int(np.round(box[1].item(), 0)))
@@ -835,7 +836,8 @@ def get_rcnn_preds(dataset_test, loaded_model):
                 keyn = imagefile + '_' + str(counter)
                 dictdf[keyn] = [outputstr, conf]
                 counter += 1
-        print('{}s to predict {} / {}'.format(np.round(time.time() - start_time, 1), idx, len_dataset_test))
+                predictions += 1
+        print('{}s to output {} predictions for image {} / {}'.format(np.round(time.time() - start_time, 1), predictions, idx, len_dataset_test))
     outdf = pd.DataFrame.from_dict(dictdf, orient = 'index').reset_index()
     outdf.columns = ['filename', 'prediction', 'conf'] 
     return outdf
