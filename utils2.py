@@ -795,7 +795,7 @@ class IEEEDataset(torch.utils.data.Dataset):
         target["image_id"] = image_id
         target["area"] = area
         target["iscrowd"] = iscrowd
-        #target["imagefile"] = self.imgs[idx]
+        target["imagefile"] = self.imgs[idx]
         
         if self.transforms is not None:
             img, target = self.transforms(img, target)
@@ -810,9 +810,11 @@ from PIL import ImageDraw
 @tdec
 def get_rcnn_preds(dataset_test, loaded_model):
     dictdf = {}
-    for idx in range(len(dataset_test)):
+    len_dataset_test = len(dataset_test)
+    for idx in range(len_dataset_test):
         start_time = time.time()
-        img, _, file = dataset_test[idx]
+        img, _ = dataset_test[idx]
+        imagefile = _['imagefile']
         label_boxes = np.array(dataset_test[idx][1]["boxes"])
         #put the model in evaluation mode
         loaded_model.eval()
@@ -829,12 +831,11 @@ def get_rcnn_preds(dataset_test, loaded_model):
                 conf = float(conf.item())
                 outputstr = label + ' ' + xmin + ' ' + ymin + ' ' + xmax + ' ' + ymax + ' '
                 if outputstr is None: outputstr = ''
-                print(file, outputstr, conf)
                 #predstr += outputstr
-                keyn = file + '_' + str(counter)
+                keyn = imagefile + '_' + str(counter)
                 dictdf[keyn] = [outputstr, conf]
                 counter += 1
-        print('{}s to predict'.format(np.round(time.time() - start_time, 1)))
+        print('{}s to predict {} / {}'.format(np.round(time.time() - start_time, 1), idx, len_dataset_test))
     outdf = pd.DataFrame.from_dict(dictdf, orient = 'index').reset_index()
     outdf.columns = ['filename', 'prediction', 'conf'] 
     return outdf
