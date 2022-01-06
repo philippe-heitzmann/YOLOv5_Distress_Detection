@@ -344,7 +344,7 @@ def show_labels(imagepath, **kwargs):
                 box_width, box_height = int(np.round(box_width * imgwidth,0)), int(np.round(box_height * imgheight,0))
 
                 ax.add_patch(patches.Rectangle((xmin,ymin),box_width, box_height, fill=False, edgecolor='red', lw=3))
-                ax.text(xmin,(ymin-15),str(lb),verticalalignment='top', color='white',fontsize=10,
+                ax.text(xmin,(ymin-5),str(lb),verticalalignment='top', color='white',fontsize=15,
                                      weight='bold').set_path_effects([patheffects.Stroke(linewidth=4, foreground='black'), patheffects.Normal()])
             plt.show()
 
@@ -496,7 +496,9 @@ def get_preds_txt(path, confidence = False):
 #                     else:
                     if confidence:
                         classid, xcenter, ycenter, box_width, box_height, conf = line.split(' ')
-                    else: classid, xcenter, ycenter, box_width, box_height = line.split(' ')
+                    else: 
+                        classid, xcenter, ycenter, box_width, box_height = line.split(' ')
+                        conf = ''
                     if int(classid) > 3:
                         continue
                     else: classid = str(int(classid) + 1)
@@ -510,7 +512,7 @@ def get_preds_txt(path, confidence = False):
                     xmax = np.round((xcenter + box_width / 2) * imwidth, 0)
                     ymin = np.round((ycenter - box_height / 2) * imheight, 0)
                     ymax = np.round((ycenter + box_height / 2) * imheight, 0)
-                    newline += classid + ' ' + str(int(xmin)) + ' ' + str(int(ymin)) + ' ' + str(int(xmax)) + ' ' + str(int(ymax)) + ' ' 
+                    newline += classid + ' ' + str(int(xmin)) + ' ' + str(int(ymin)) + ' ' + str(int(xmax)) + ' ' + str(int(ymax)) + ' '
                     dictdf[file] = newline
         except:
             #print('No Labels')
@@ -992,3 +994,24 @@ def train_fastrcnn(num_epochs, model, optimizer, lr_scheduler, data_loader_train
         lr_scheduler.step()
         # evaluate on the test dataset
         evaluate(model, data_loader_val, device=device)
+        
+        
+import google_streetview.api
+from utils2 import *
+
+def get_multiple_gsv_im(locations, size, heading, pitch, key, outfolder = 'gsv_downloads'):
+    
+     # Define parameters for street view api
+    params = {
+        'size': size, # max 640x640 pixels
+        'location': locations,
+        'heading': heading,
+        'pitch': pitch,
+        'key': key
+    }
+    api_list = google_streetview.helpers.api_list(params)
+    print(api_list)
+    results = google_streetview.api.results(api_list)
+    results.download_links(outfolder)
+    for i in range(len(api_list)):
+        show_im(f'''gsv_downloads/gsv_{i}.jpg''')
