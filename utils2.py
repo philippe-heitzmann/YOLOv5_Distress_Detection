@@ -999,7 +999,7 @@ def train_fastrcnn(num_epochs, model, optimizer, lr_scheduler, data_loader_train
 import google_streetview.api
 from utils2 import *
 
-def get_multiple_gsv_im(locations, size, heading, pitch, key, outfolder = 'gsv_downloads'):
+def get_multiple_gsv_im(locations, size, heading, pitch, key, outfolder = 'gsv_downloads', show_image = False):
     
      # Define parameters for street view api
     params = {
@@ -1010,8 +1010,35 @@ def get_multiple_gsv_im(locations, size, heading, pitch, key, outfolder = 'gsv_d
         'key': key
     }
     api_list = google_streetview.helpers.api_list(params)
-    print(api_list)
     results = google_streetview.api.results(api_list)
     results.download_links(outfolder)
-    for i in range(len(api_list)):
-        show_im(f'''gsv_downloads/gsv_{i}.jpg''')
+    if show_image:
+        for i in range(len(api_list)):
+            show_im(f'''{outfolder}/gsv_{i}.jpg''')
+
+        
+@tdec
+def get_road_section_scores(*paths, frequency_factor = 0.5):
+    '''Function to produce scores of road sections by weighting road damage frequency and severity along road section'''
+    intermediate_score = {}
+    for idx, path in enumerate(list(paths)):
+        files = get_files_in_dir(path = path, extension = 'jpg', show_folders = False)
+        distress_ct = 0
+        rsconfidences = []
+        for file in files:
+            labelpath = path + '/labels' + os.sep + file.replace('jpg','txt',1)
+            try:
+                with open(labelpath) as labelfile:
+                    lines = [line.rstrip() for line in labelfile.readlines()]
+                    distress_ct += len(lines)
+                    for line in lines:
+                        classid, xcenter, ycenter, box_width, box_height, conf = line.split(' ')
+                        rsconfidences.append(float(conf))
+            except:
+                continue
+        if len(rsconfidences) != 0:  
+            average_conf = sum(rsconfidences) / len(rsconfidences)
+        else:
+            average_conf = 0.5
+        intermediate_score[idx] = {'distress_ct':distress_ct, 'average_conf':average_conf}
+    return intermediate_score
