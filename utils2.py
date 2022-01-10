@@ -49,6 +49,8 @@ import xml.etree.ElementTree as ET
   
 import sys
 sys.path.append('/Users/Administrator/DS/IEEE-Big-Data-2020')
+sys.path.append('/Users/phil0/DS/IEEE')
+
 
 def tdec(func):
     def inner(*args, **kwargs):
@@ -342,7 +344,7 @@ def show_labels(imagepath, **kwargs):
                 box_width, box_height = int(np.round(box_width * imgwidth,0)), int(np.round(box_height * imgheight,0))
 
                 ax.add_patch(patches.Rectangle((xmin,ymin),box_width, box_height, fill=False, edgecolor='red', lw=3))
-                ax.text(xmin,(ymin-15),str(lb),verticalalignment='top', color='white',fontsize=10,
+                ax.text(xmin,(ymin-5),str(lb),verticalalignment='top', color='white',fontsize=15,
                                      weight='bold').set_path_effects([patheffects.Stroke(linewidth=4, foreground='black'), patheffects.Normal()])
             plt.show()
 
@@ -351,6 +353,7 @@ def wrapper_show_labels(imagedir, start = 0, end = 10, **kwargs):
     imagepaths = get_files_in_dir(path = imagedir, extension = 'jpg', **kwargs)
     
     for imagepath in imagepaths[start:end]:
+        print(imagepath)
         #print(imagepath)
         show_labels(imagepath = imagepath, **kwargs)
 
@@ -493,7 +496,9 @@ def get_preds_txt(path, confidence = False):
 #                     else:
                     if confidence:
                         classid, xcenter, ycenter, box_width, box_height, conf = line.split(' ')
-                    else: classid, xcenter, ycenter, box_width, box_height = line.split(' ')
+                    else: 
+                        classid, xcenter, ycenter, box_width, box_height = line.split(' ')
+                        conf = ''
                     if int(classid) > 3:
                         continue
                     else: classid = str(int(classid) + 1)
@@ -507,7 +512,7 @@ def get_preds_txt(path, confidence = False):
                     xmax = np.round((xcenter + box_width / 2) * imwidth, 0)
                     ymin = np.round((ycenter - box_height / 2) * imheight, 0)
                     ymax = np.round((ycenter + box_height / 2) * imheight, 0)
-                    newline += classid + ' ' + str(int(xmin)) + ' ' + str(int(ymin)) + ' ' + str(int(xmax)) + ' ' + str(int(ymax)) + ' ' 
+                    newline += classid + ' ' + str(int(xmin)) + ' ' + str(int(ymin)) + ' ' + str(int(xmax)) + ' ' + str(int(ymax)) + ' '
                     dictdf[file] = newline
         except:
             #print('No Labels')
@@ -792,7 +797,7 @@ class IEEEDataset(torch.utils.data.Dataset):
         target["image_id"] = image_id
         target["area"] = area
         target["iscrowd"] = iscrowd
-        #target["imagefile"] = self.imgs[idx]
+        target["imagefile"] = self.imgs[idx]
         
         if self.transforms is not None:
             img, target = self.transforms(img, target)
@@ -807,9 +812,11 @@ from PIL import ImageDraw
 @tdec
 def get_rcnn_preds(dataset_test, loaded_model):
     dictdf = {}
-    for idx in range(len(dataset_test)):
+    len_dataset_test = len(dataset_test)
+    for idx in range(len_dataset_test):
         start_time = time.time()
-        img, _, file = dataset_test[idx]
+        img, _ = dataset_test[idx]
+        imagefile = _['imagefile']
         label_boxes = np.array(dataset_test[idx][1]["boxes"])
         #put the model in evaluation mode
         loaded_model.eval()
@@ -817,6 +824,7 @@ def get_rcnn_preds(dataset_test, loaded_model):
             prediction = loaded_model([img])
             #predstr = ''
             counter = 0
+            predictions = 0
             for box, label, conf in zip(prediction[0]['boxes'], prediction[0]['labels'], prediction[0]['scores']):
                 xmin = str(int(np.round(box[0].item(), 0)))
                 ymin = str(int(np.round(box[1].item(), 0)))
@@ -826,12 +834,12 @@ def get_rcnn_preds(dataset_test, loaded_model):
                 conf = float(conf.item())
                 outputstr = label + ' ' + xmin + ' ' + ymin + ' ' + xmax + ' ' + ymax + ' '
                 if outputstr is None: outputstr = ''
-                print(file, outputstr, conf)
                 #predstr += outputstr
-                keyn = file + '_' + str(counter)
+                keyn = imagefile + '_' + str(counter)
                 dictdf[keyn] = [outputstr, conf]
                 counter += 1
-        print('{}s to predict'.format(np.round(time.time() - start_time, 1)))
+                predictions += 1
+        print('{}s to output {} predictions for image {} / {}'.format(np.round(time.time() - start_time, 1), predictions, idx, len_dataset_test))
     outdf = pd.DataFrame.from_dict(dictdf, orient = 'index').reset_index()
     outdf.columns = ['filename', 'prediction', 'conf'] 
     return outdf
@@ -988,12 +996,49 @@ def train_fastrcnn(num_epochs, model, optimizer, lr_scheduler, data_loader_train
         evaluate(model, data_loader_val, device=device)
         
         
-def show_imgs_in_dir(path):
-    for i in os.listdir(path):
-        img = iopen(path + os.sep + i)
-        print(img.size)
+import google_streetview.api
+from utils2 import *
+
+def get_multiple_gsv_im(locations, size, heading, pitch, key, outfolder = 'gsv_downloads', show_image = False):
+    
+     # Define parameters for street view api
+    params = {
+        'size': size, # max 640x640 pixels
+        'location': locations,
+        'heading': heading,
+        'pitch': pitch,
+        'key': key
+    }
+    api_list = google_streetview.helpers.api_list(params)
+    results = google_streetview.api.results(api_list)
+    results.download_links(outfolder)
+    if show_image:
+        for i in range(len(api_list)):
+            show_im(f'''{outfolder}/gsv_{i}.jpg''')
+
         
-def iopen(imgpath):
-    imgobj = PIL.Image.open(imgpath)
-    display(imgobj)
-    return imgobj
+@tdec
+def get_road_section_scores(*paths, frequency_factor = 0.5):
+    '''Function to produce scores of road sections by weighting road damage frequency and severity along road section'''
+    intermediate_score = {}
+    for idx, path in enumerate(list(paths)):
+        files = get_files_in_dir(path = path, extension = 'jpg', show_folders = False)
+        distress_ct = 0
+        rsconfidences = []
+        for file in files:
+            labelpath = path + '/labels' + os.sep + file.replace('jpg','txt',1)
+            try:
+                with open(labelpath) as labelfile:
+                    lines = [line.rstrip() for line in labelfile.readlines()]
+                    distress_ct += len(lines)
+                    for line in lines:
+                        classid, xcenter, ycenter, box_width, box_height, conf = line.split(' ')
+                        rsconfidences.append(float(conf))
+            except:
+                continue
+        if len(rsconfidences) != 0:  
+            average_conf = sum(rsconfidences) / len(rsconfidences)
+        else:
+            average_conf = 0.5
+        intermediate_score[idx] = {'distress_ct':distress_ct, 'average_conf':average_conf}
+    return intermediate_score
