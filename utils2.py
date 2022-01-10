@@ -975,10 +975,10 @@ def get_dataloaders(idx_cutoff, train_batch_size, root, data_file, num_workers =
     return dataset, dataset_test, data_loader, data_loader_test
 
 
-def train_fastrcnn(num_epochs, model, optimizer, lr_scheduler, data_loader_train, data_loader_val, device, print_freq = 50, save_every = 10, output_weights_file = 'train/weights/model_1218_fastrcnn_{}e'):
+def train_fastrcnn(num_epochs, model, optimizer, lr_scheduler, data_loader_train, data_loader_val, device, notequal = [0], print_freq = 50, save_every = 10, output_weights_file = 'train/weights/model_1218_fastrcnn_{}e'):
     
     for idx, epoch in enumerate(range(num_epochs)):
-        if (idx != 0) & (idx % save_every == 0):
+        if (idx not in notequal) & (idx % save_every == 0):
             torch.save(model.state_dict(), output_weights_file.format(idx))
         # train for one epoch, printing every print_freq iterations
         train_one_epoch(model, optimizer, data_loader_train, device, epoch, print_freq)
@@ -986,3 +986,14 @@ def train_fastrcnn(num_epochs, model, optimizer, lr_scheduler, data_loader_train
         lr_scheduler.step()
         # evaluate on the test dataset
         evaluate(model, data_loader_val, device=device)
+        
+        
+def show_imgs_in_dir(path):
+    for i in os.listdir(path):
+        img = iopen(path + os.sep + i)
+        print(img.size)
+        
+def iopen(imgpath):
+    imgobj = PIL.Image.open(imgpath)
+    display(imgobj)
+    return imgobj
