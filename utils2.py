@@ -51,6 +51,8 @@ import sys
 sys.path.append('/Users/Administrator/DS/IEEE-Big-Data-2020')
 sys.path.append('/Users/phil0/DS/IEEE')
 
+import typing
+
 
 def tdec(func):
     def inner(*args, **kwargs):
@@ -996,7 +998,7 @@ def train_fastrcnn(num_epochs, model, optimizer, lr_scheduler, data_loader_train
         evaluate(model, data_loader_val, device=device)
         
         
-import google_streetview.api
+#import google_streetview.api
 from utils2 import *
 
 def get_multiple_gsv_im(locations, size, heading, pitch, key, outfolder = 'gsv_downloads', show_image = False):
@@ -1042,3 +1044,355 @@ def get_road_section_scores(*paths, frequency_factor = 0.5):
             average_conf = 0.5
         intermediate_score[idx] = {'distress_ct':distress_ct, 'average_conf':average_conf}
     return intermediate_score
+
+
+def show1(*objs):
+    for obj in objs:
+        try: print(obj.shape, type(obj))
+        except: print(type(obj))
+            
+def display_np_array(array):
+    #function to display numpy array using matplotlib 
+    plt.imshow(array, interpolation='nearest')
+    plt.show()
+    
+    
+# import the necessary packages
+import cv2
+import imutils
+import argparse
+import numpy as np
+from imutils import contours
+    
+    
+def read_ocr(ocr_path):
+    # load the reference OCR-A image from disk, convert it to grayscale,
+    # and threshold it, such that the digits appear as *white* on a
+    # *black* background
+    # and invert it, such that the digits appear as *white* on a *black*
+    ref = cv2.imread(ocr_path)
+    ref = cv2.cvtColor(ref, cv2.COLOR_BGR2GRAY)
+    ref = cv2.threshold(ref, 10, 255, cv2.THRESH_BINARY_INV)[1]
+    
+    # find contours in the OCR-A image (i.e,. the outlines of the digits)
+    # sort them from left to right, and initialize a dictionary to map
+    # digit name to the ROI
+    refCnts = cv2.findContours(ref.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    refCnts = imutils.grab_contours(refCnts)
+    refCnts = contours.sort_contours(refCnts, method="left-to-right")[0]
+    return ref, refCnts
+
+
+
+
+def get_digits(ref, refCnts):
+    digits = {}
+    # loop over the OCR-A reference contours
+    for (i, c) in enumerate(refCnts):
+        # Compute the bounding box for the digit, 
+        # extract it, and resize it to a fixed size. 
+        (x, y, w, h) = cv2.boundingRect(c)
+        roi = ref[y:y + h, x:x + w]
+        roi = cv2.resize(roi, (57, 88))
+
+        # update the digits dictionary, mapping the digit name to the ROI
+        digits[i] = roi
+    return digits
+
+def get_kernel(size):
+    #create kernel of size size
+    return cv2.getStructuringElement(cv2.MORPH_RECT, size)
+
+def get_grayscale(imagepath):
+    # load the input image, resize it, and convert it to grayscale
+    image = cv2.imread(imagepath)
+    image = imutils.resize(image, width=300)
+    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    return image, gray
+
+
+def cleanAndRead(img,contours):
+    """Takes the extracted contours and once it passes the rotation
+    and ratio checks it passes the potential license plate to PyTesseract for OCR reading"""
+    for i,cnt in enumerate(contours):
+        min_rect = cv2.minAreaRect(cnt)
+
+        if validateRotationAndRatio(min_rect):
+
+            x,y,w,h = cv2.boundingRect(cnt)
+            plate_img = img[y:y+h,x:x+w]
+
+            if(isMaxWhite(plate_img)):
+                clean_plate, rect = cleanPlate(plate_img)
+                
+                if rect:
+                    row, col = 1, 2
+                    fig, axs = plt.subplots(row, col, figsize=(15, 10))
+                    fig.tight_layout()
+                    
+                    x1,y1,w1,h1 = rect
+                    x,y,w,h = x+x1,y+y1,w1,h1
+                    
+                    axs[0].imshow(cv2.cvtColor(clean_plate, cv2.COLOR_BGR2RGB))
+                    axs[0].set_title('Cleaned Plate')
+                    cv2.imwrite('cleaned_plate.jpg', clean_plate)
+                    
+                    plate_im = Image.fromarray(clean_plate)
+                    text = tess.image_to_string(plate_im, lang='eng')
+                    print("Detected Text : ", text)
+
+                    img = cv2.rectangle(img,(x,y),(x+w,y+h),(0,255,0),2)
+                    axs[1].imshow(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
+                    axs[1].set_title('Detected Plate')
+                    cv2.imwrite('detected_plate.jpg', img)
+                    
+                    plt.show()
+                    
+def cleanPlate(plate):
+    """This function gets the countours that most likely resemeber the shape
+    of a license plate"""    
+    gray = cv2.cvtColor(plate, cv2.COLOR_BGR2GRAY)
+    kernel = cv2.getStructuringElement(cv2.MORPH_CROSS, (3, 3))
+    thresh = cv2.dilate(gray, kernel, iterations = 1)
+
+    _, thresh = cv2.threshold(gray, 150, 255, cv2.THRESH_BINARY)
+    contours, hierarchy = cv2.findContours(thresh.copy(),cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+
+    if contours:
+        areas = [cv2.contourArea(c) for c in contours]
+        max_index = np.argmax(areas)
+
+        max_cnt = contours[max_index]
+        max_cntArea = areas[max_index]
+        x,y,w,h = cv2.boundingRect(max_cnt)
+
+#         if not ratioCheck(max_cntArea,w,h):
+#             return plate,None
+
+        cleaned_final = thresh[y:y+h, x:x+w]
+        plt.imshow(cv2.cvtColor(cleaned_final, cv2.COLOR_BGR2RGB))
+        plt.title('Function Test'); plt.show()
+        
+        return cleaned_final,[x,y,w,h]
+
+    else:
+        return plate, None
+
+import pytesseract as tess
+tess.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
+
+@tdec
+def read_cc_nums(ocr_path, imagepath):
+    ref, refCnts = read_ocr(ocr_path)
+    digits = get_digits(ref, refCnts)
+    rectKernel = get_kernel((9,3))
+    sqKernel = get_kernel((5,5)) 
+    image, gray = get_grayscale(imagepath)
+    #plt.imshow(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
+    # apply a tophat (whitehat) morphological operator to find light
+    # regions against a dark background (i.e., the credit card numbers)
+    tophat = cv2.morphologyEx(gray, cv2.MORPH_TOPHAT, rectKernel)
+    # compute the Scharr gradient of the tophat image, then scale
+    # the rest back into the range [0, 255]
+    gradX = cv2.Sobel(tophat, ddepth=cv2.CV_32F, dx=1, dy=0, ksize=-1)
+    gradX = np.absolute(gradX)
+    (minVal, maxVal) = (np.min(gradX), np.max(gradX))
+    gradX = (255 * ((gradX - minVal) / (maxVal - minVal)))
+    gradX = gradX.astype("uint8")    
+    # apply a closing operation using the rectangular kernel to help
+    # cloes gaps in between credit card number digits, then apply
+    # Otsu's thresholding method to binarize the image
+    gradX = cv2.morphologyEx(gradX, cv2.MORPH_CLOSE, rectKernel)
+    thresh = cv2.threshold(gradX, 0, 255, cv2.THRESH_BINARY | cv2.THRESH_OTSU)[1]  
+    # apply a second closing operation to the binary image, again
+    # to help close gaps between credit card number regions
+    thresh = cv2.morphologyEx(thresh, cv2.MORPH_CLOSE, sqKernel)
+
+    # find contours in the thresholded image, then initialize the
+    # list of digit locations
+    cnts = cv2.findContours(thresh.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    cnts = imutils.grab_contours(cnts)
+    digitlocs = []
+    charlocs = []
+    bbs = []
+    # loop over the contours
+    for (i, c) in enumerate(cnts):
+        # compute the bounding box of the contour, then use the
+        # bounding box coordinates to derive the aspect ratio
+        (x, y, w, h) = cv2.boundingRect(c)
+        bbs.append((x, y, w, h))
+        ar = w / float(h)
+        
+        #nums
+        # since credit cards used a fixed size fonts with 4 groups
+        # of 4 digits, we can prune potential contours based on the
+        # aspect ratio
+        if ar > 2.5 and ar < 4:
+            # contours can further be pruned on minimum/maximum width
+            # and height
+            if (w > 40 and w < 55) and (h > 10 and h < 20):
+                # append the bounding box region of the digits group
+                # to our locations list
+                digitlocs.append((x, y, w, h))
+        #chars
+        if ar > 4 and ar < 9:
+            # contours can further be pruned on minimum/maximum width
+            # and height
+            if (w > 55 and w < 130) and (h > 10 and h < 20):
+                # append the bounding box region of the digits group
+                # to our locations list
+                charlocs.append((x, y, w, h))
+
+    # sort the digit locations from left-to-right, then initialize the
+    # list of classified digits
+    digitlocs = sorted(digitlocs, key=lambda x:x[0])
+    output = []
+    
+    #digits
+    # loop over the 4 groupings of 4 digits
+    for (i, (gX, gY, gW, gH)) in enumerate(digitlocs):
+        # initialize the list of group digits
+        groupOutput = []
+
+        # extract the group ROI of 4 digits from the grayscale image,
+        # then apply thresholding to segment the digits from the
+        # background of the credit card
+        group = gray[gY - 5:gY + gH + 5, gX - 5:gX + gW + 5]
+        group = cv2.threshold(group, 0, 255, cv2.THRESH_BINARY | cv2.THRESH_OTSU)[1]
+
+        # detect the contours of each individual digit in the group,
+        # then sort the digit contours from left to right
+        digitCnts = cv2.findContours(group.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        digitCnts = imutils.grab_contours(digitCnts)
+        digitCnts = contours.sort_contours(digitCnts, method="left-to-right")[0]
+        # loop over the digit contours
+        for c in digitCnts:
+            # compute the bounding box of the individual digit, extract
+            # the digit, and resize it to have the same fixed size as
+            # the reference OCR-A images
+            (x, y, w, h) = cv2.boundingRect(c)
+            roi = group[y:y + h, x:x + w]
+            roi = cv2.resize(roi, (57, 88))
+
+            # initialize a list of template matching scores
+            scores = []
+
+            # loop over the reference digit name and digit ROI
+            for (digit, digitROI) in digits.items():
+                # apply correlation-based template matching, take the
+                # score, and update the scores list
+                result = cv2.matchTemplate(roi, digitROI, cv2.TM_CCOEFF)
+
+                (_, score, _, _) = cv2.minMaxLoc(result)
+
+                scores.append(score)
+
+            # The classification for the digit ROI will be the reference
+            # digit name with the *largest* template matching score
+            groupOutput.append(str(np.argmax(scores)))
+
+        # draw the digit classifications around the group
+        cv2.rectangle(image, (gX - 5, gY - 5),
+            (gX + gW + 5, gY + gH + 5), (0, 0, 255), 2)
+        cv2.putText(image, "".join(groupOutput), (gX, gY - 15),
+            cv2.FONT_HERSHEY_SIMPLEX, 0.65, (0, 0, 255), 2)
+
+        # update the output digits list
+        output.extend(groupOutput)
+        
+    #chars 
+    for (i, (gX, gY, gW, gH)) in enumerate(charlocs):
+        
+        groupOutput = []
+
+        # extract the group ROI of 4 digits from the grayscale image,
+        # then apply thresholding to segment the digits from the
+        # background of the credit card
+        group = gray[gY - 5:gY + gH + 5, gX - 5:gX + gW + 5]
+        group = cv2.threshold(group, 0, 255, cv2.THRESH_BINARY | cv2.THRESH_OTSU)[1]
+        display_np_array(group)
+        # detect the contours of each individual digit in the group,
+        # then sort the digit contours from left to right
+        charCnts = cv2.findContours(group.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        charCnts = imutils.grab_contours(charCnts)
+        charCnts = contours.sort_contours(charCnts, method="left-to-right")[0]
+        print(charCnts)
+        print('Length chars', len(charCnts))
+        # loop over the digit contours
+        for c in charCnts:
+            # compute the bounding box of the individual digit, extract
+            # the digit, and resize it to have the same fixed size as
+            # the reference OCR-A images
+            (x, y, w, h) = cv2.boundingRect(c)
+            name_img = image[y:y+h,x:x+w]
+            plate_im = Image.fromarray(name_img)
+            text = tess.image_to_string(plate_im, lang='eng')
+            print("Detected Text : ", text)
+            #display_np_array(name_img)
+#             roi = group[y:y + h, x:x + w]
+#             roi = cv2.resize(roi, (57, 88))
+
+#             # initialize a list of template matching scores
+#             scores = []
+
+#             # loop over the reference digit name and digit ROI
+#             for (digit, digitROI) in digits.items():
+#                 # apply correlation-based template matching, take the
+#                 # score, and update the scores list
+#                 result = cv2.matchTemplate(roi, digitROI, cv2.TM_CCOEFF)
+
+#                 (_, score, _, _) = cv2.minMaxLoc(result)
+
+#                 scores.append(score)
+
+            # The classification for the digit ROI will be the reference
+            # digit name with the *largest* template matching score
+            groupOutput.append(str(np.argmax(scores)))
+
+        # draw the digit classifications around the group
+        cv2.rectangle(image, (gX - 5, gY - 5),
+            (gX + gW + 5, gY + gH + 5), (0, 0, 255), 2)
+        cv2.putText(image, "".join(groupOutput), (gX, gY - 15),
+            cv2.FONT_HERSHEY_SIMPLEX, 0.65, (0, 0, 255), 2)
+
+        # update the output digits list
+        output.extend(groupOutput)
+
+#         x,y,w,h = cv2.boundingRect((gX, gY, gW, gH))
+#         plate_img = img[y:y+h,x:x+w]
+
+# #         if(isMaxWhite(plate_img)):
+#         clean_plate, rect = cleanPlate(plate_img)
+
+#         if rect:
+#             row, col = 1, 2
+#             fig, axs = plt.subplots(row, col, figsize=(15, 10))
+#             fig.tight_layout()
+
+#             x1,y1,w1,h1 = rect
+#             x,y,w,h = x+x1,y+y1,w1,h1
+
+#             axs[0].imshow(cv2.cvtColor(clean_plate, cv2.COLOR_BGR2RGB))
+#             axs[0].set_title('Cleaned Plate')
+#             #cv2.imwrite('cleaned_plate.jpg', clean_plate)
+
+#             plate_im = Image.fromarray(clean_plate)
+#             text = tess.image_to_string(plate_im, lang='eng')
+#             print("Detected Text : ", text)
+
+#             img = cv2.rectangle(img,(x,y),(x+w,y+h),(0,255,0),2)
+#             axs[1].imshow(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
+#             axs[1].set_title('Detected Plate')
+#             cv2.imwrite('detected_plate.jpg', img)
+
+#             plt.show()
+        
+    #print("Credit Card Type: {}".format(FIRST_NUMBER[output[0]]))
+    print("Credit Card #: {}".format("".join(output)))
+    # cv2.imshow("Image", image)
+    # cv2.waitKey(0)
+
+    plt.imshow(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
+    #plt.title('Image'); plt.show()
+    return charlocs, digitlocs, cnts, thresh, bbs, output
+        
