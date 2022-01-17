@@ -36,6 +36,7 @@ from matplotlib import rc, patches, patheffects
 import PIL.Image as Image
 
 #styling
+import typing
 from typing import List, Dict
 
 import time 
@@ -50,8 +51,6 @@ import xml.etree.ElementTree as ET
 import sys
 sys.path.append('/Users/Administrator/DS/IEEE-Big-Data-2020')
 sys.path.append('/Users/phil0/DS/IEEE')
-
-import typing
 
 
 def tdec(func):
@@ -79,18 +78,23 @@ def get_lines(labelpath):
     
     
 @tdec
-def get_files_in_dir(path = './data/train/Japan/labels', show_folders = False, **kwargs):
+def get_files_in_dir(*extensions, path = './data/train/Japan/labels', show_folders = False, **kwargs):
     'Function to return all files in a directory with option of filtering for specific filetype extension'
     
-    files = next(walk(path), (None, None, []))[2]
-    if 'fullpath' in kwargs and kwargs['fullpath']:
-        files = [path + os.sep + f for f in files if f.endswith(kwargs['extension'])]
-    else: files = [f for f in files if f.endswith(kwargs['extension'])]
+    result = []
+    for extension in list(extensions):
+        files = next(walk(path), (None, None, []))[2]
+        if 'fullpath' in kwargs and kwargs['fullpath']:
+            files = [path + os.sep + f for f in files if f.endswith(extension)]
+            result.extend(files)
+        else: 
+            files = [f for f in files if f.endswith(extension)]
+            result.extend(files)
     if show_folders:
         folders = next(walk(path), (None, None, []))[1]
         folders = [folder for folder in folders if folder[0] != '.']
-        return files, folders
-    return files
+        return result, folders
+    return result
 
 
 @tdec
@@ -1178,8 +1182,12 @@ def cleanPlate(plate):
     else:
         return plate, None
 
+import sys
+sys.path.append(r'C:/Users/phil0/Tesseract-OCR/tesseract.exe')
 import pytesseract as tess
-tess.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
+# tess.pytesseract.tesseract_cmd = r'C:/Program Files/Tesseract-OCR/tesseract.exe'
+tess.pytesseract.tesseract_cmd = r'C:/Users/phil0/Tesseract-OCR/tesseract.exe'
+
 
 @tdec
 def read_cc_nums(ocr_path, imagepath):
@@ -1299,64 +1307,85 @@ def read_cc_nums(ocr_path, imagepath):
 
         # update the output digits list
         output.extend(groupOutput)
+    newim = Image.fromarray(image)
+    display(newim)
         
     #chars 
     for (i, (gX, gY, gW, gH)) in enumerate(charlocs):
-        
-        groupOutput = []
+        name_img = image[gY:gY+gH,gX:gX+gW]
+        newim = Image.fromarray(name_img)
+        display(newim)
+        img = cv2.cvtColor(name_img, cv2.COLOR_BGR2GRAY)
+#         cv2.threshold(gray, 0,255,cv2.THRESH_BINARY| cv2.THRESH_OTSU)[1]
+        _, img_binarized = cv2.threshold(img, 0, 255, cv2.THRESH_BINARY_INV | cv2.THRESH_OTSU)
+        img = Image.fromarray(img_binarized)
+        display(img)
+        text = get_chars(img_binarized, lang='eng')
+        print("Detected Text : ", text)
+#         groupOutput = []
 
-        # extract the group ROI of 4 digits from the grayscale image,
-        # then apply thresholding to segment the digits from the
-        # background of the credit card
-        group = gray[gY - 5:gY + gH + 5, gX - 5:gX + gW + 5]
-        group = cv2.threshold(group, 0, 255, cv2.THRESH_BINARY | cv2.THRESH_OTSU)[1]
-        display_np_array(group)
-        # detect the contours of each individual digit in the group,
-        # then sort the digit contours from left to right
-        charCnts = cv2.findContours(group.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-        charCnts = imutils.grab_contours(charCnts)
-        charCnts = contours.sort_contours(charCnts, method="left-to-right")[0]
-        print(charCnts)
-        print('Length chars', len(charCnts))
-        # loop over the digit contours
-        for c in charCnts:
-            # compute the bounding box of the individual digit, extract
-            # the digit, and resize it to have the same fixed size as
-            # the reference OCR-A images
-            (x, y, w, h) = cv2.boundingRect(c)
-            name_img = image[y:y+h,x:x+w]
-            plate_im = Image.fromarray(name_img)
-            text = tess.image_to_string(plate_im, lang='eng')
-            print("Detected Text : ", text)
-            #display_np_array(name_img)
-#             roi = group[y:y + h, x:x + w]
-#             roi = cv2.resize(roi, (57, 88))
+#         # extract the group ROI of 4 digits from the grayscale image,
+#         # then apply thresholding to segment the digits from the
+#         # background of the credit card
+#         group = gray[gY - 5:gY + gH + 5, gX - 5:gX + gW + 5]
+#         group = cv2.threshold(group, 0, 255, cv2.THRESH_BINARY | cv2.THRESH_OTSU)[1]
+#         display_np_array(group)
+#         # detect the contours of each individual digit in the group,
+#         # then sort the digit contours from left to right
+#         charCnts = cv2.findContours(group.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+#         charCnts = imutils.grab_contours(charCnts)
+#         charCnts = contours.sort_contours(charCnts, method="left-to-right")[0]
+#         print('Length chars', len(charCnts))
+#         # loop over the digit contours
+#         for c in charCnts:
+#             # compute the bounding box of the individual digit, extract
+#             # the digit, and resize it to have the same fixed size as
+#             # the reference OCR-A images
+#             (x, y, w, h) = cv2.boundingRect(c)
+#             name_img = image[y:y+h,x:x+w]
+#             plate_im = Image.fromarray(name_img)
+# #             show1(plate_im)
+# #             print(plate_im)
+#             print('displaying image')
+#             display(plate_im)
+            
+# #             plt.imshow(plate_im, interpolation='nearest')
 
-#             # initialize a list of template matching scores
-#             scores = []
+# #             plt.imshow(cv2.cvtColor(plate_im, cv2.COLOR_BGR2RGB))
+# #             img = cv2.rectangle(img,(x,y),(x+w,y+h),(0,255,0),2)
+# #             axs[1].imshow(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
+            
+#             text = tess.image_to_string(plate_im, lang='eng')
+#             print("Detected Text : ", text)
+#             #display_np_array(name_img)
+# #             roi = group[y:y + h, x:x + w]
+# #             roi = cv2.resize(roi, (57, 88))
 
-#             # loop over the reference digit name and digit ROI
-#             for (digit, digitROI) in digits.items():
-#                 # apply correlation-based template matching, take the
-#                 # score, and update the scores list
-#                 result = cv2.matchTemplate(roi, digitROI, cv2.TM_CCOEFF)
+# #             # initialize a list of template matching scores
+# #             scores = []
 
-#                 (_, score, _, _) = cv2.minMaxLoc(result)
+# #             # loop over the reference digit name and digit ROI
+# #             for (digit, digitROI) in digits.items():
+# #                 # apply correlation-based template matching, take the
+# #                 # score, and update the scores list
+# #                 result = cv2.matchTemplate(roi, digitROI, cv2.TM_CCOEFF)
 
-#                 scores.append(score)
+# #                 (_, score, _, _) = cv2.minMaxLoc(result)
 
-            # The classification for the digit ROI will be the reference
-            # digit name with the *largest* template matching score
-            groupOutput.append(str(np.argmax(scores)))
+# #                 scores.append(score)
 
-        # draw the digit classifications around the group
-        cv2.rectangle(image, (gX - 5, gY - 5),
-            (gX + gW + 5, gY + gH + 5), (0, 0, 255), 2)
-        cv2.putText(image, "".join(groupOutput), (gX, gY - 15),
-            cv2.FONT_HERSHEY_SIMPLEX, 0.65, (0, 0, 255), 2)
+#             # The classification for the digit ROI will be the reference
+#             # digit name with the *largest* template matching score
+#             groupOutput.append(str(np.argmax(scores)))
 
-        # update the output digits list
-        output.extend(groupOutput)
+#         # draw the digit classifications around the group
+#         cv2.rectangle(image, (gX - 5, gY - 5),
+#             (gX + gW + 5, gY + gH + 5), (0, 0, 255), 2)
+#         cv2.putText(image, "".join(groupOutput), (gX, gY - 15),
+#             cv2.FONT_HERSHEY_SIMPLEX, 0.65, (0, 0, 255), 2)
+
+#         # update the output digits list
+#         output.extend(groupOutput)
 
 #         x,y,w,h = cv2.boundingRect((gX, gY, gW, gH))
 #         plate_img = img[y:y+h,x:x+w]
@@ -1388,11 +1417,25 @@ def read_cc_nums(ocr_path, imagepath):
 #             plt.show()
         
     #print("Credit Card Type: {}".format(FIRST_NUMBER[output[0]]))
-    print("Credit Card #: {}".format("".join(output)))
+#     print("Credit Card #: {}".format("".join(output)))
     # cv2.imshow("Image", image)
     # cv2.waitKey(0)
 
     plt.imshow(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
     #plt.title('Image'); plt.show()
-    return charlocs, digitlocs, cnts, thresh, bbs, output
+    return charlocs, digitlocs, cnts, thresh, bbs, ''.join(output)
         
+def get_chars(img, show_image = False, **kwargs):
+    if isinstance(img, str):
+        img = cv2.imread(img)
+    if show_image:
+        plt.imshow(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
+        plt.title('Test Image'); plt.show()
+    image = Image.fromarray(img)
+    text = tess.image_to_string(image, **kwargs)
+    print("PyTesseract Detected the following text: ", text)
+    return text
+
+@tdec
+def readcsv(path, **kwargs):
+    return pd.read_csv(path, sep = ',', **kwargs)
