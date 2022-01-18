@@ -47,6 +47,10 @@ from collections import defaultdict
 import csv
 import requests
 import xml.etree.ElementTree as ET
+
+#string manipulation
+import re
+import string
   
 import sys
 sys.path.append('/Users/Administrator/DS/IEEE-Big-Data-2020')
@@ -1188,9 +1192,14 @@ import pytesseract as tess
 # tess.pytesseract.tesseract_cmd = r'C:/Program Files/Tesseract-OCR/tesseract.exe'
 tess.pytesseract.tesseract_cmd = r'C:/Users/phil0/Tesseract-OCR/tesseract.exe'
 
+def check_locs(bb, min_x, max_x, min_y, max_y):
+    #bb in format xmin, ymin, width, height
+    if bb[0] > min_x and bb[0] + bb[2] < max_x and bb[1] > min_y and bb[1] + bb[3] < max_y:
+        return True
+    return False
 
 @tdec
-def read_cc_nums(ocr_path, imagepath):
+def read_cc_nums(ocr_path, imagepath, char_min_y):
     ref, refCnts = read_ocr(ocr_path)
     digits = get_digits(ref, refCnts)
     rectKernel = get_kernel((9,3))
@@ -1222,34 +1231,54 @@ def read_cc_nums(ocr_path, imagepath):
     cnts = imutils.grab_contours(cnts)
     digitlocs = []
     charlocs = []
-    bbs = []
+    #bbs in format xmin, ymin, width, height
+    digitbbs = []
+    charbbs = []
     # loop over the contours
     for (i, c) in enumerate(cnts):
         # compute the bounding box of the contour, then use the
         # bounding box coordinates to derive the aspect ratio
         (x, y, w, h) = cv2.boundingRect(c)
-        bbs.append((x, y, w, h))
-        ar = w / float(h)
-        
-        #nums
-        # since credit cards used a fixed size fonts with 4 groups
-        # of 4 digits, we can prune potential contours based on the
-        # aspect ratio
-        if ar > 2.5 and ar < 4:
-            # contours can further be pruned on minimum/maximum width
-            # and height
-            if (w > 40 and w < 55) and (h > 10 and h < 20):
-                # append the bounding box region of the digits group
-                # to our locations list
-                digitlocs.append((x, y, w, h))
+        #digits
+        if check_locs((x, y, w, h), min_x = 15, max_x = 285, min_y = 85, max_y = 145):
+            digitbbs.append((x, y, w, h))
+            ar = w / float(h)
+
+            #nums
+            # since credit cards used a fixed size fonts with 4 groups
+            # of 4 digits, we can prune potential contours based on the
+            # aspect ratio
+            if ar > 2.5 and ar < 4:
+                # contours can further be pruned on minimum/maximum width
+                # and height
+                if (w > 40 and w < 55) and (h > 10 and h < 20):
+                    # append the bounding box region of the digits group
+                    # to our locations list
+                    digitlocs.append((x, y, w, h))\
         #chars
-        if ar > 4 and ar < 9:
-            # contours can further be pruned on minimum/maximum width
-            # and height
-            if (w > 55 and w < 130) and (h > 10 and h < 20):
-                # append the bounding box region of the digits group
-                # to our locations list
-                charlocs.append((x, y, w, h))
+#         if check_locs((x, y, w, h), min_x = 15, max_x = 200, min_y = 130, max_y = 1000):
+#             charbbs.append((x, y, w, h))
+#             ar = w / float(h)
+#             #chars
+#             if ar > 4 and ar < 9:
+#                 # contours can further be pruned on minimum/maximum width
+#                 # and height
+#                 if (w > 55 and w < 130) and (h > 10 and h < 25):
+#                     # append the bounding box region of the digits group
+#                     # to our locations list
+#                     charlocs.append((x, y, w, h))
+                    
+    #chars
+    min_x, max_x, min_y, max_y = 15, 200, char_min_y, 1000
+    group = gray[min_y - 5:max_y, min_x - 5:max_x]
+    group = cv2.threshold(group, 0, 255, cv2.THRESH_BINARY | cv2.THRESH_OTSU)[1]
+#     img = cv2.cvtColor(name_img, cv2.COLOR_BGR2GRAY)
+# #         cv2.threshold(gray, 0,255,cv2.THRESH_BINARY| cv2.THRESH_OTSU)[1]
+#         _, img_binarized = cv2.threshold(img, 0, 255, cv2.THRESH_BINARY_INV | cv2.THRESH_OTSU)
+    img = Image.fromarray(group)
+    display(img)
+    text = get_chars(group, lang='eng')
+#     print("Detected Text : ", text)
 
     # sort the digit locations from left-to-right, then initialize the
     # list of classified digits
@@ -1267,7 +1296,8 @@ def read_cc_nums(ocr_path, imagepath):
         # background of the credit card
         group = gray[gY - 5:gY + gH + 5, gX - 5:gX + gW + 5]
         group = cv2.threshold(group, 0, 255, cv2.THRESH_BINARY | cv2.THRESH_OTSU)[1]
-
+        img3 = Image.fromarray(group)
+        display(img3)
         # detect the contours of each individual digit in the group,
         # then sort the digit contours from left to right
         digitCnts = cv2.findContours(group.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
@@ -1307,21 +1337,22 @@ def read_cc_nums(ocr_path, imagepath):
 
         # update the output digits list
         output.extend(groupOutput)
+    print(imagepath)
     newim = Image.fromarray(image)
     display(newim)
         
-    #chars 
-    for (i, (gX, gY, gW, gH)) in enumerate(charlocs):
-        name_img = image[gY:gY+gH,gX:gX+gW]
-        newim = Image.fromarray(name_img)
-        display(newim)
-        img = cv2.cvtColor(name_img, cv2.COLOR_BGR2GRAY)
-#         cv2.threshold(gray, 0,255,cv2.THRESH_BINARY| cv2.THRESH_OTSU)[1]
-        _, img_binarized = cv2.threshold(img, 0, 255, cv2.THRESH_BINARY_INV | cv2.THRESH_OTSU)
-        img = Image.fromarray(img_binarized)
-        display(img)
-        text = get_chars(img_binarized, lang='eng')
-        print("Detected Text : ", text)
+#     #chars 
+#     for (i, (gX, gY, gW, gH)) in enumerate(charlocs):
+#         name_img = image[gY:gY+gH,gX:gX+gW]
+#         newim = Image.fromarray(name_img)
+#         display(newim)
+#         img = cv2.cvtColor(name_img, cv2.COLOR_BGR2GRAY)
+# #         cv2.threshold(gray, 0,255,cv2.THRESH_BINARY| cv2.THRESH_OTSU)[1]
+#         _, img_binarized = cv2.threshold(img, 0, 255, cv2.THRESH_BINARY_INV | cv2.THRESH_OTSU)
+#         img = Image.fromarray(img_binarized)
+#         display(img)
+#         text = get_chars(img_binarized, lang='eng')
+#         print("Detected Text : ", text)
 #         groupOutput = []
 
 #         # extract the group ROI of 4 digits from the grayscale image,
@@ -1423,7 +1454,7 @@ def read_cc_nums(ocr_path, imagepath):
 
     plt.imshow(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
     #plt.title('Image'); plt.show()
-    return charlocs, digitlocs, cnts, thresh, bbs, ''.join(output)
+    return charlocs, digitlocs, cnts, thresh, digitbbs, charbbs, ''.join(output), text
         
 def get_chars(img, show_image = False, **kwargs):
     if isinstance(img, str):
@@ -1439,3 +1470,80 @@ def get_chars(img, show_image = False, **kwargs):
 @tdec
 def readcsv(path, **kwargs):
     return pd.read_csv(path, sep = ',', **kwargs)
+
+
+@tdec
+def show_bb(imagepath, bbs: List, pascal_voc = False):
+    '''Function to show bounding box predictions on an image
+    PASCAL VOC: bb in format <xmin><ymin><xmax><ymax>
+    YOLO: bb in format <xcenter><ycenter><half height><half width>
+    bb is normally passed in YOLO format'''
+    
+    if pascal_voc:
+        pass
+        
+    img = cv2.imread(imagepath)
+    color = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+#     plt.imshow(color)
+#     plt.title('Image')
+    fig, ax = plt.subplots(figsize = (6,9))
+    for idx, bb in enumerate(bbs):
+        x, y, w, h = bb[0], bb[1], bb[2], bb[3]
+        ax.xaxis.tick_top()
+        ax.add_patch(patches.Rectangle((x,y),w,h, fill=False, edgecolor='red', lw=2))
+        ax.text(x,(y-20),str(idx),verticalalignment='top', color='white',fontsize=10,
+                weight='bold').set_path_effects([patheffects.Stroke(linewidth=4, foreground='black'), patheffects.Normal()])
+    ax.imshow(img)
+    return 
+
+def getimsize(imagepath):
+    img = cv2.imread(imagepath)
+    return img.shape
+
+
+def process_str(string):
+    string = string.upper()
+    string = re.sub(r'[^\w\s]','',string)
+    string = string.splitlines()
+    if len(string) == 0:
+        return string
+    return string[0]
+
+
+@tdec
+def test_cc_thresholds(df, range_thresholds):
+    resultsdict = {}
+    for charminy in range_thresholds:
+        print(charminy)
+        digit_tp = 0
+        char_tp = 0
+        for idx, row in df.iterrows():
+            charlocs, digitlocs, cnts, thresh, digitbbs, charbbs, output, text = read_cc_nums(ocr_path = 'ocr_a_reference.png', imagepath = row['filename'], char_min_y = charminy)
+            show_bb(imagepath = row['filename'], bbs = digitbbs)
+            print('Credit card number:', output)
+            print('Digit Groundtruth:', row['cc_number'])
+            if row['cc_number'] == str(output):
+                digit_tp += 1
+                print('Correct digits: ', digit_tp)
+            else:
+                print('Digits False Positive')
+            print('\n')
+            print('Text Groundtruth:', row['cardholder'])
+            chartext = process_str(text)
+            print('Final detected text:', chartext)
+            if row['cardholder'] == chartext:
+                char_tp += 1
+                print('Correct chars: ', char_tp)
+            else:
+                print('Text False Positive')
+            if row['cc_number'] != str(output) and row['cardholder'] != chartext:
+                print('####')
+                print('No matches')
+                print('####')
+            print('-----------------------')
+        digits_recall = digit_tp / float(len(df))
+        char_recall = char_tp / float(len(df))
+        print('Digits recall:', digits_recall)
+        print('Char recall:', char_recall)
+        resultsdict[charminy] = (digits_recall, char_recall)
+    return resultsdict 
