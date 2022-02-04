@@ -1594,3 +1594,21 @@ def is_text_positive(text: str) -> bool:
     """True if tweet has positive compound sentiment, False otherwise."""
     sia = SentimentIntensityAnalyzer()
     return sia.polarity_scores(text)["compound"] > 0
+
+import pathlib
+def path_bs2fs(path: str):
+    p = pathlib.PureWindowsPath(path)
+    print('\'' + p.as_posix() + '\'')
+    
+    
+@tdec
+def create_video_from_images(*extensions, image_dir, output_video_name, fps = 30):
+    images = get_files_in_dir(*extensions, path = image_dir, fullpath = True)
+    frame = cv2.imread(images[0])
+    height, width, layers = frame.shape
+    video = cv2.VideoWriter(output_video_name, 0, fps, (width,height))
+    for image in images:
+        video.write(cv2.imread(image))
+    cv2.destroyAllWindows()
+    video.release()
+    
