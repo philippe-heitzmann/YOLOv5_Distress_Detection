@@ -1259,7 +1259,7 @@ def read_cc_nums(ocr_path, imagepath, char_min_y):
     # sort the digit locations from left-to-right, then initialize the
     # list of classified digits
     digitlocs = sorted(digitlocs, key=lambda x:x[0])
-    output = []
+    output = [] 
     
     #digits
     # loop over the 4 groupings of 4 digits
