@@ -277,6 +277,54 @@ def show_preds(dict_preds: Dict, labeldict, rootpath = './data/test2/Japan/image
 
     return 'Done Outputting Bounding Box Image Visualizations'
 
+
+def show_preds2(imgspath, start = 0, end = 10, **kwargs):
+
+    files= get_files_in_dir(path = imgspath, **kwargs)
+    for file in files[start:end]:
+        print(file)
+        labelpath = imgspath.replace('images','labels',1) + os.sep + file.replace('jpg','txt',1)
+        imgpath = imgspath + os.sep + file
+        print(labelpath, imgpath)
+        with open(labelpath) as labelfile:
+            lines = [line.rstrip() for line in labelfile.readlines()] 
+            print(lines)
+            if len(lines) > 0:
+                
+                img = cv2.imread(imgpath)
+                color = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+                plt.imshow(color)
+                plt.title(imgpath)
+                pil_image = PIL.Image.open('./train/India/images/India_000005.jpg')
+                imgwidth, imgheight = pil_image.size
+                fig, ax = plt.subplots(figsize = (6,9))
+
+                for label in lines:
+                    
+                    print('Label',label)
+                    lb = label.split(' ')[0]
+                    print('lb ', lb)
+                    x, y, w, h = [float(i) for i in label.split(' ')[1:]] 
+#                     print('dims pre', x, y, w, h)
+#                     x *= imgwidth
+#                     w *= imgwidth
+#                     y *= imgheight
+#                     h *= imgheight
+#                     print('dims post', x, y, w, h)
+                    x, y, w, h = [int(i) for i in [x, y, w, h]]
+                    print(x, y, w, h)
+                    ax.xaxis.tick_top()
+                    ax.add_patch(patches.Rectangle((x,y),w,h, fill=False, edgecolor='red', lw=2))
+                    ax.text(x,(y-50),str(lb),verticalalignment='top', color='white',fontsize=10,
+                            weight='bold').set_path_effects([patheffects.Stroke(linewidth=4, foreground='black'), patheffects.Normal()])
+#                 plt.show(img)
+                ax.imshow(img)
+                plt.pause(1)
+                ax.cla()
+        print('\n')
+    
+    return f'''Done showing {start}:{end} images'''
+
 @tdec
 def get_all_class_ids(path, extension, show_country = False):
     classes = set()
