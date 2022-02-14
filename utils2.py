@@ -36,6 +36,7 @@ from matplotlib import rc, patches, patheffects
 import PIL.Image as Image
 
 #styling
+import typing
 from typing import List, Dict
 
 import time 
@@ -46,6 +47,10 @@ from collections import defaultdict
 import csv
 import requests
 import xml.etree.ElementTree as ET
+
+#string manipulation
+import re
+import string
   
 import sys
 sys.path.append('/Users/Administrator/DS/IEEE-Big-Data-2020')
@@ -77,18 +82,23 @@ def get_lines(labelpath):
     
     
 @tdec
-def get_files_in_dir(path = './data/train/Japan/labels', show_folders = False, **kwargs):
+def get_files_in_dir(*extensions, path = './data/train/Japan/labels', show_folders = False, **kwargs):
     'Function to return all files in a directory with option of filtering for specific filetype extension'
     
-    files = next(walk(path), (None, None, []))[2]
-    if 'fullpath' in kwargs and kwargs['fullpath']:
-        files = [path + os.sep + f for f in files if f.endswith(kwargs['extension'])]
-    else: files = [f for f in files if f.endswith(kwargs['extension'])]
+    result = []
+    for extension in list(extensions):
+        files = next(walk(path), (None, None, []))[2]
+        if 'fullpath' in kwargs and kwargs['fullpath']:
+            files = [path + '/' + f for f in files if f.endswith(extension)]
+            result.extend(files)
+        else: 
+            files = [f for f in files if f.endswith(extension)]
+            result.extend(files)
     if show_folders:
         folders = next(walk(path), (None, None, []))[1]
         folders = [folder for folder in folders if folder[0] != '.']
-        return files, folders
-    return files
+        return result, folders
+    return result
 
 
 @tdec
@@ -939,7 +949,7 @@ def visualize_rcnn(idxs, dataset_test, loaded_model, conf_threshold = 0.01, grou
         loaded_model.eval()
         with torch.no_grad():
             prediction = loaded_model([img])
-        image = Image.fromarray(img.mul(255).permute(1, 2,0).byte().numpy())
+        image = Image.fromarray(img.mul(255).permute(1, 2, 0).byte().numpy())
         draw = ImageDraw.Draw(image)
         if groundtruth:
             label_boxes = dataset_test[idx][1]
@@ -1031,10 +1041,10 @@ def get_dataloaders(idx_cutoff, train_batch_size, root, data_file, num_workers =
     return dataset, dataset_test, data_loader, data_loader_test
 
 
-def train_fastrcnn(num_epochs, model, optimizer, lr_scheduler, data_loader_train, data_loader_val, device, print_freq = 50, save_every = 10, output_weights_file = 'train/weights/model_1218_fastrcnn_{}e'):
+def train_fastrcnn(num_epochs, model, optimizer, lr_scheduler, data_loader_train, data_loader_val, device, notequal = [0], print_freq = 50, save_every = 10, output_weights_file = 'train/weights/model_1218_fastrcnn_{}e'):
     
     for idx, epoch in enumerate(range(num_epochs)):
-        if (idx != 0) & (idx % save_every == 0):
+        if (idx not in notequal) & (idx % save_every == 0):
             torch.save(model.state_dict(), output_weights_file.format(idx))
         # train for one epoch, printing every print_freq iterations
         train_one_epoch(model, optimizer, data_loader_train, device, epoch, print_freq)
@@ -1044,7 +1054,7 @@ def train_fastrcnn(num_epochs, model, optimizer, lr_scheduler, data_loader_train
         evaluate(model, data_loader_val, device=device)
         
         
-import google_streetview.api
+#import google_streetview.api
 from utils2 import *
 
 def get_multiple_gsv_im(locations, size, heading, pitch, key, outfolder = 'gsv_downloads', show_image = False):
@@ -1090,3 +1100,563 @@ def get_road_section_scores(*paths, frequency_factor = 0.5):
             average_conf = 0.5
         intermediate_score[idx] = {'distress_ct':distress_ct, 'average_conf':average_conf}
     return intermediate_score
+
+
+def show1(*objs):
+    for obj in objs:
+        try: print(obj.shape, type(obj))
+        except: print(type(obj))
+            
+def display_np_array(array):
+    #function to display numpy array using matplotlib 
+    plt.imshow(array, interpolation='nearest')
+    plt.show()
+    
+    
+# import the necessary packages
+import cv2
+import imutils
+import argparse
+import numpy as np
+from imutils import contours
+    
+    
+def read_ocr(ocr_path):
+    # load the reference OCR-A image from disk, convert it to grayscale,
+    # and threshold it, such that the digits appear as *white* on a
+    # *black* background
+    # and invert it, such that the digits appear as *white* on a *black*
+    ref = cv2.imread(ocr_path)
+    ref = cv2.cvtColor(ref, cv2.COLOR_BGR2GRAY)
+    ref = cv2.threshold(ref, 10, 255, cv2.THRESH_BINARY_INV)[1]
+    
+    # find contours in the OCR-A image (i.e,. the outlines of the digits)
+    # sort them from left to right, and initialize a dictionary to map
+    # digit name to the ROI
+    refCnts = cv2.findContours(ref.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    refCnts = imutils.grab_contours(refCnts)
+    refCnts = contours.sort_contours(refCnts, method="left-to-right")[0]
+    return ref, refCnts
+
+
+def get_digits(ref, refCnts):
+    digits = {}
+    # loop over the OCR-A reference contours
+    for (i, c) in enumerate(refCnts):
+        # Compute the bounding box for the digit, 
+        # extract it, and resize it to a fixed size. 
+        (x, y, w, h) = cv2.boundingRect(c)
+        roi = ref[y:y + h, x:x + w]
+        roi = cv2.resize(roi, (57, 88))
+
+        # update the digits dictionary, mapping the digit name to the ROI
+        digits[i] = roi
+    return digits
+
+def get_kernel(size):
+    #create kernel of size size
+    return cv2.getStructuringElement(cv2.MORPH_RECT, size)
+
+def get_grayscale(imagepath):
+    # load the input image, resize it, and convert it to grayscale
+    image = cv2.imread(imagepath)
+    image = imutils.resize(image, width=300)
+    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    return image, gray
+
+
+def cleanAndRead(img,contours):
+    """Takes the extracted contours and once it passes the rotation
+    and ratio checks it passes the potential license plate to PyTesseract for OCR reading"""
+    for i,cnt in enumerate(contours):
+        min_rect = cv2.minAreaRect(cnt)
+
+        if validateRotationAndRatio(min_rect):
+
+            x,y,w,h = cv2.boundingRect(cnt)
+            plate_img = img[y:y+h,x:x+w]
+
+            if(isMaxWhite(plate_img)):
+                clean_plate, rect = cleanPlate(plate_img)
+                
+                if rect:
+                    row, col = 1, 2
+                    fig, axs = plt.subplots(row, col, figsize=(15, 10))
+                    fig.tight_layout()
+                    
+                    x1,y1,w1,h1 = rect
+                    x,y,w,h = x+x1,y+y1,w1,h1
+                    
+                    axs[0].imshow(cv2.cvtColor(clean_plate, cv2.COLOR_BGR2RGB))
+                    axs[0].set_title('Cleaned Plate')
+                    cv2.imwrite('cleaned_plate.jpg', clean_plate)
+                    
+                    plate_im = Image.fromarray(clean_plate)
+                    text = tess.image_to_string(plate_im, lang='eng')
+                    print("Detected Text : ", text)
+
+                    img = cv2.rectangle(img,(x,y),(x+w,y+h),(0,255,0),2)
+                    axs[1].imshow(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
+                    axs[1].set_title('Detected Plate')
+                    cv2.imwrite('detected_plate.jpg', img)
+                    
+                    plt.show()
+                    
+def cleanPlate(plate):
+    """This function gets the countours that most likely resemeber the shape
+    of a license plate"""    
+    gray = cv2.cvtColor(plate, cv2.COLOR_BGR2GRAY)
+    kernel = cv2.getStructuringElement(cv2.MORPH_CROSS, (3, 3))
+    thresh = cv2.dilate(gray, kernel, iterations = 1)
+
+    _, thresh = cv2.threshold(gray, 150, 255, cv2.THRESH_BINARY)
+    contours, hierarchy = cv2.findContours(thresh.copy(),cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+
+    if contours:
+        areas = [cv2.contourArea(c) for c in contours]
+        max_index = np.argmax(areas)
+
+        max_cnt = contours[max_index]
+        max_cntArea = areas[max_index]
+        x,y,w,h = cv2.boundingRect(max_cnt)
+
+#         if not ratioCheck(max_cntArea,w,h):
+#             return plate,None
+
+        cleaned_final = thresh[y:y+h, x:x+w]
+        plt.imshow(cv2.cvtColor(cleaned_final, cv2.COLOR_BGR2RGB))
+        plt.title('Function Test'); plt.show()
+        
+        return cleaned_final,[x,y,w,h]
+
+    else:
+        return plate, None
+
+import sys
+sys.path.append(r'C:/Users/phil0/Tesseract-OCR/tesseract.exe')
+import pytesseract as tess
+# tess.pytesseract.tesseract_cmd = r'C:/Program Files/Tesseract-OCR/tesseract.exe'
+tess.pytesseract.tesseract_cmd = r'C:/Users/phil0/Tesseract-OCR/tesseract.exe'
+
+def check_locs(bb, min_x, max_x, min_y, max_y):
+    #bb in format xmin, ymin, width, height
+    if bb[0] > min_x and bb[0] + bb[2] < max_x and bb[1] > min_y and bb[1] + bb[3] < max_y:
+        return True
+    return False
+
+@tdec
+def read_cc_nums(ocr_path, imagepath, char_min_y):
+    ref, refCnts = read_ocr(ocr_path)
+    digits = get_digits(ref, refCnts)
+    rectKernel = get_kernel((9,3))
+    sqKernel = get_kernel((5,5)) 
+    image, gray = get_grayscale(imagepath)
+    # apply a tophat (whitehat) morphological operator to find light
+    # regions against a dark background (i.e., the credit card numbers)
+    tophat = cv2.morphologyEx(gray, cv2.MORPH_TOPHAT, rectKernel)
+    # compute the Scharr gradient of the tophat image, then scale
+    # the rest back into the range [0, 255]
+    gradX = cv2.Sobel(tophat, ddepth=cv2.CV_32F, dx=1, dy=0, ksize=-1)
+    gradX = np.absolute(gradX)
+    (minVal, maxVal) = (np.min(gradX), np.max(gradX))
+    gradX = (255 * ((gradX - minVal) / (maxVal - minVal)))
+    gradX = gradX.astype("uint8")    
+    # apply a closing operation using the rectangular kernel to help
+    # cloes gaps in between credit card number digits, then apply
+    # Otsu's thresholding method to binarize the image
+    gradX = cv2.morphologyEx(gradX, cv2.MORPH_CLOSE, rectKernel)
+    thresh = cv2.threshold(gradX, 0, 255, cv2.THRESH_BINARY | cv2.THRESH_OTSU)[1]  
+    # apply a second closing operation to the binary image, again
+    # to help close gaps between credit card number regions
+    thresh = cv2.morphologyEx(thresh, cv2.MORPH_CLOSE, sqKernel)
+
+    # find contours in the thresholded image, then initialize the
+    # list of digit locations
+    cnts = cv2.findContours(thresh.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    cnts = imutils.grab_contours(cnts)
+    digitlocs = []
+    charlocs = []
+    #bbs in format xmin, ymin, width, height
+    digitbbs = []
+    # loop over the contours
+    for (i, c) in enumerate(cnts):
+        # compute the bounding box of the contour, then use the
+        # bounding box coordinates to derive the aspect ratio
+        (x, y, w, h) = cv2.boundingRect(c)
+        #digits
+        if check_locs((x, y, w, h), min_x = 15, max_x = 285, min_y = 85, max_y = 145):
+            digitbbs.append((x, y, w, h))
+            ar = w / float(h)
+            # since credit cards used a fixed size fonts with 4 groups
+            # of 4 digits, we can prune potential contours based on the
+            # aspect ratio
+            if ar > 2.5 and ar < 4:
+                # contours can further be pruned on minimum/maximum width
+                # and height
+                if (w > 40 and w < 55) and (h > 10 and h < 20):
+                    # append the bounding box region of the digits group
+                    # to our locations list
+                    digitlocs.append((x, y, w, h))      
+    #chars
+    min_x, max_x, min_y, max_y = 15, 200, char_min_y, 1000
+    group = gray[min_y - 5:max_y, min_x - 5:max_x]
+    group = cv2.threshold(group, 0, 255, cv2.THRESH_BINARY | cv2.THRESH_OTSU)[1]
+    img = Image.fromarray(group)
+    display(img)
+    text = get_chars(group, lang='eng')
+    # sort the digit locations from left-to-right, then initialize the
+    # list of classified digits
+    digitlocs = sorted(digitlocs, key=lambda x:x[0])
+    output = [] 
+    
+    #digits
+    # loop over the 4 groupings of 4 digits
+    for (i, (gX, gY, gW, gH)) in enumerate(digitlocs):
+        # initialize the list of group digits
+        groupOutput = []
+        # extract the group ROI of 4 digits from the grayscale image,
+        # then apply thresholding to segment the digits from the
+        # background of the credit card
+        group = gray[gY - 5:gY + gH + 5, gX - 5:gX + gW + 5]
+        group = cv2.threshold(group, 0, 255, cv2.THRESH_BINARY | cv2.THRESH_OTSU)[1]
+        img3 = Image.fromarray(group)
+        display(img3)
+        # detect the contours of each individual digit in the group,
+        # then sort the digit contours from left to right
+        digitCnts = cv2.findContours(group.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        digitCnts = imutils.grab_contours(digitCnts)
+        digitCnts = contours.sort_contours(digitCnts, method="left-to-right")[0]
+        # loop over the digit contours
+        for c in digitCnts:
+            # compute the bounding box of the individual digit, extract
+            # the digit, and resize it to have the same fixed size as
+            # the reference OCR-A images
+            (x, y, w, h) = cv2.boundingRect(c)
+            roi = group[y:y + h, x:x + w]
+            roi = cv2.resize(roi, (57, 88))
+            # initialize a list of template matching scores
+            scores = []
+            # loop over the reference digit name and digit ROI
+            for (digit, digitROI) in digits.items():
+                # apply correlation-based template matching, take the
+                # score, and update the scores list
+                result = cv2.matchTemplate(roi, digitROI, cv2.TM_CCOEFF)
+                (_, score, _, _) = cv2.minMaxLoc(result)
+                scores.append(score)
+            # The classification for the digit ROI will be the reference
+            # digit name with the *largest* template matching score
+            groupOutput.append(str(np.argmax(scores)))
+
+        # draw the digit classifications around the group
+        cv2.rectangle(image, (gX - 5, gY - 5),
+            (gX + gW + 5, gY + gH + 5), (0, 0, 255), 2)
+        cv2.putText(image, "".join(groupOutput), (gX, gY - 15),
+           cv2.FONT_HERSHEY_SIMPLEX, 0.65, (0, 0, 255), 2)
+
+        # update the output digits list
+        output.extend(groupOutput)
+    print(imagepath)
+    newim = Image.fromarray(image)
+    display(newim)
+
+    plt.imshow(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
+    return charlocs, digitlocs, cnts, thresh, digitbbs, ''.join(output), text, image
+        
+def get_chars(img, show_image = False, **kwargs):
+    if isinstance(img, str):
+        img = cv2.imread(img)
+    if show_image:
+        plt.imshow(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
+        plt.title('Test Image'); plt.show()
+    image = Image.fromarray(img)
+    text = tess.image_to_string(image, **kwargs)
+    print("PyTesseract Detected the following text: ", text)
+    return text
+
+@tdec
+def readcsv(path, **kwargs):
+    return pd.read_csv(path, sep = ',', **kwargs)
+
+
+@tdec
+def show_bb(image, bbs: List, pascal_voc = False, resize = None):
+    '''Function to show bounding box predictions on an image
+    PASCAL VOC: bb in format <xmin><ymin><xmax><ymax>
+    YOLO: bb in format <xcenter><ycenter><half height><half width>
+    bb is normally passed in YOLO format'''
+    
+    if pascal_voc:
+        pass
+    if isinstance(image, str):
+        if resize:
+            img = cv2.imread(image)
+            img = cv2.resize(img, dsize = resize, interpolation = cv2.INTER_AREA)
+            print(img.shape)
+        else: img = cv2.imread(image)
+    else:
+        img = Image.fromarray(image)
+    fig, ax = plt.subplots(figsize = (6,9))
+    for idx, bb in enumerate(bbs):
+        x, y, w, h = bb[0], bb[1], bb[2], bb[3]
+        ax.xaxis.tick_top()
+        ax.add_patch(patches.Rectangle((x,y),w,h, fill=False, edgecolor='red', lw=2))
+        ax.text(x,(y-20),str(idx),verticalalignment='top', color='white',fontsize=10,
+                weight='bold').set_path_effects([patheffects.Stroke(linewidth=4, foreground='black'), patheffects.Normal()])
+    ax.imshow(img)
+    return 
+
+def getimsize(imagepath):
+    img = cv2.imread(imagepath)
+    return img.shape
+
+
+def process_str(string):
+    string = string.upper()
+    string = re.sub(r'[^\w\s]','',string)
+    string = string.splitlines()
+    if len(string) == 0:
+        return string
+    return string[0]
+
+
+@tdec
+def test_cc_thresholds(df, range_thresholds):
+    resultsdict = {}
+    for charminy in range_thresholds:
+        print(charminy)
+        digit_tp = 0
+        char_tp = 0
+        for idx, row in df.iterrows():
+            charlocs, digitlocs, cnts, thresh, digitbbs, output, text, image = read_cc_nums(ocr_path = 'ocr_a_reference.png', imagepath = row['filename'], char_min_y = charminy)
+            show_bb(imagepath = row['filename'], bbs = digitbbs)
+            print('Credit card number:', output)
+            print('Digit Groundtruth:', row['cc_number'])
+            if row['cc_number'] == str(output):
+                digit_tp += 1
+                print('Correct digits: ', digit_tp)
+            else:
+                print('Digits False Positive')
+            print('\n')
+            print('Text Groundtruth:', row['cardholder'])
+            chartext = process_str(text)
+            print('Final detected text:', chartext)
+            if row['cardholder'] == chartext:
+                char_tp += 1
+                print('Correct chars: ', char_tp)
+            else:
+                print('Text False Positive')
+            if row['cc_number'] != str(output) and row['cardholder'] != chartext:
+                print('####')
+                print('No matches')
+                print('####')
+            print('-----------------------')
+        digits_recall = digit_tp / float(len(df))
+        char_recall = char_tp / float(len(df))
+        print('Digits recall:', digits_recall)
+        print('Char recall:', char_recall)
+        resultsdict[charminy] = (digits_recall, char_recall)
+    return resultsdict 
+
+
+# Unsupervised ML
+
+# import hdbscan
+# from sklearn.cluster import KMeans
+# from sklearn.preprocessing import MinMaxScaler, StandardScaler
+# import plotly.graph_objects as go
+# import plotly.express as px 
+
+# def scale(df, cols, **kwargs):
+#     df = df.loc[:, cols]
+#     df = df.to_numpy()
+#     if 'scaletype' in kwargs and kwargs['scaletype'] == 'minmax':
+#         scaler = MinMaxScaler()
+#     else:
+#         scaler = StandardScaler()
+#     scaler.fit(df)
+#     X = scaler.transform(df)
+#     dff = pd.DataFrame(X, columns = cols)
+#     return dff, scaler
+
+# @tdec
+# def get_kmeans(data, cols, n_clusters = 3, random_state = 42, **kwargs):
+#     data, scaler = scale(df = data, cols = cols, **kwargs)
+#     kmeans = KMeans(n_clusters=n_clusters, init='k-means++', n_init = 10, tol = 1e-04, random_state = random_state)
+#     kmeans.fit(data)
+#     clusters = pd.DataFrame(data, columns = cols)
+#     clusters['label'] = kmeans.labels_
+#     polars = clusters.groupby('label').mean().reset_index()
+#     polar = pd.melt(polar, id_vars = ['label'])
+#     fig = px.line_polar(polar, r='value', theta = 'variable', color = 'label', line_close = True, height = 800, width = 1400)
+#     return fig, polar, clusters, scaler
+
+# def get_clusters(data, cols, cluster_labels):
+#     data = data[cols]
+#     clusters = pd.DataFrame(data, columns = cols)
+#     clusters['label'] = cluster_labels
+#     polar = clusters.groupby('label').mean().reset_index()
+#     polar = pd.melt(polar, id_vars = ['label'])
+#     fig = px.line_polar(polar, r = 'value', theta = 'variable', color = 'label', line_close = True, height = 800, width = 1400)
+#     return fig, polar, clusters, scaler
+
+# def inv_transform(data, scaler, cols, clusters):
+#     data_inv = scaler.inverse_transform(data)
+#     data_inv = pd.DataFrame(data_inv, columns = cols)
+#     data_inv['labels'] = clusters['label']
+#     cols = [col for col in data_inv.columns]
+#     groupby_dict = {}
+#     for idx, col in enumerate(cols):
+#         if idx == 0:
+#             groupby_dict[col] = ['mean', 'count']
+#             continue
+#         groupby_dict[col] = ['mean']
+#     df = data_inv.groupby('labels').agg(groupby_dict).reset_index()
+#     df_cols = ['_'.join(col) for col in [c for c in df.columns]]
+#     df.columns = df_cols
+#     df['perc'] = df.iloc[:,2] / df.iloc[:,2].sum()
+#     return df, data_inv
+
+# def get_hdbscan_cluster_stats_unscaled(data, scaler, cols, clusters):
+#     data_inv['labels'] = clusters['label']
+#     cols = [col for col in data_inv.columns]
+#     groupby_dict = {}
+#     for idx, col in enumerate(cols):
+#         if idx == 0:
+#             groupby_dict[col] = ['mean', 'count']
+#             continue
+#         groupby_dict[col] = ['mean']
+#     df = data_inv.groupby('labels').agg(groupby_dict).reset_index()
+#     df_cols = ['_'.join(col) for col in [c for c in df.columns]]
+#     df.columns = df_cols
+#     df['perc'] = df.iloc[:,2] / df.iloc[:,2].sum()
+#     return df, data_inv
+    
+# def inv_transform2(data, scaler):
+#     data_inv = scaler.inverse_transform(data)
+#     return data_inv
+
+# @tdec 
+# def HDBSCAN_hyperparameter_search(df, min_cluster_sizes, min_sample_sizes, scaler, cols):
+#     dfs =[]
+#     for min_cluster_size in min_cluster_sizes:
+#         for min_samples in min_samples_sizes:
+#             start_time = time.time()
+#             clusterer = hdbscan.HDBSCAN(min_cluster_size = min_cluster_size, min_samples = min_samples)
+#             cluster_labels = clusterer.fit_predict(df)
+#             clusters_unique = np.unique(cluster_labels)
+#             print(clusters_unique)
+#             clusters = pd.DataFrame(cluster_labels, columns = ['label'])
+#             dfg, data_inv = get_hdbscan_cluster_stats_unscaled(df, scaler, cols = cols, clusters = clusters)
+#             dfs.append((dfg, data_inv, clusters, min_cluster_size, min_samples))
+#             print('{} sec to complete HDBSCAN with {} min_cluster_size and {} min_samples'.format(np.round(time.time() - start_time, 0), min_cluster_size, min_samples))
+#     return dfs
+
+# def filter_hdbscan_dfs(dfs, noise_threshold):
+#     for dfg, data_inv, clusters, min_cluster_size, min_samples in dfs:
+#         if dfg.iloc[0,-1] < noise_threshold:
+#             print(min_cluster_size, min_samples, '\n', dfg.head())
+            
+# def get_hdbscan_polar(dfg, data, clusters, min_cluster_size, min_samples):
+#     print('Min Cluster size:', min_cluster_size, '| Min Sample Size:', min_samples)
+#     dfg = dfg[['labels_','tenure_mean','tenure_count','chdep_ind_mean','onln_signon_days_mean','di_bal_mean','atmdays_mean','mobile_signon_days_mean']]
+#     tenure_count = dfg['tenure_count']
+#     dfg = dfg.drop('tenure_count', axis = 1)
+#     polar = pd.melt(dfg, id_vars = ['labels_'])
+#     fig = px.line_polar(polar, r='value', theta = 'variable', color = 'labels_', line_close = True, height = 800, width = 1400)
+#     dfg['perc'] = tenure_count / tenure_count.sum()
+#     print(dfg)
+#     fig.show()
+#     return dfg
+            
+            
+# def get_elbow_plot(X, start = 1, end = 11, elbow_annot = None, random_state = 42):
+#     inertia = []
+#     for i in range(start, end):
+#         kmeans = KMeans(n_clusters=n_clusters, init='k-means++', n_init = 10, tol = 1e-04, random_state = random_state)
+#         kmeans.fit(X)
+#         inertia.append(kmeans.inertia_)
+#     fig = go.Figure(data = go.Scater(x=np.arange(1,11), y= inertia))
+#     if elbow_annot is not None:
+#         annotation = dict(x=elbow_annot, y = inertia[eblow_annot - 1], xref = 'x', yref = 'y', text = 'Elbow!', showarrow = True, arrowhead = 7, ax = 20, ay = -40)
+#         fig.update_layout(annotations =[annotation])
+#     fig.update_layout(title='Inertia vs Cluster Number', xaxis = dict(range=[0,11], title = 'Cluster Number'), yaxis = {'title':'Inertia'})
+#     return fig, inertia
+#     fig
+           
+import nltk
+from nltk.sentiment import SentimentIntensityAnalyzer
+
+@tdec
+def remove_stopwords(words):
+    stopwords = nltk.corpus.stopwords.words("english")
+    words = [w for w in words if w.lower() not in stopwords]
+    return words
+
+
+@tdec
+def get_freq_dist(text: str):
+    fdist = nltk.FreqDist(word.lower() for word in nltk.word_tokenize(text))
+    return fdist
+
+
+@tdec
+def get_concordances(corpus: str, target_word, n_lines):
+    text = nltk.Text(nltk.corpus.state_union.words())
+    concordances = text.concordance_list(target_word, lines=n_lines)
+    return concordances
+
+@tdec
+def tokenize_text(text: List[str], granularity = 'words'):
+    '''Use to tokenize list of multi-worded strings to create a text corpus
+    Inputs: granularity == \'words\' for tokenization to words-level of granularity, == \'sentences' for sentence-level'''
+    if granularity == 'words':
+        #tokenize text to the word level
+        words = [nltk.word_tokenize(word) for word in text]
+    else:
+        #tokenize text to the sentence level
+        words = [nltk.sent_tokenize(word) for word in text]
+    return words
+
+
+@tdec
+def get_collocations(gramtype, words):
+    '''Used to return most common collections of n words where n in set [2-4] inclusive'''
+    if gramtype not in ['bigram','trigram','quadgram']:
+        raise ValueError('Collocation gram type should be one of \'bigram\', \'trigram\' , \'quadgram\'')
+    if gramtype == 'bigram': 
+        finder = nltk.collocations.TrigramCollocationFinder.from_words(words)
+    elif gramtype == 'trigram':
+        finder = nltk.collocations.TrigramCollocationFinder.from_words(words)
+    else:
+        finder = nltk.collocations.QuadgramCollocationFinder.from_words(words)
+    return finder
+
+@tdec
+def get_vader_polarity_score(text):    
+    sia = SentimentIntensityAnalyzer()
+    scores = sia.polarity_scores(text)
+    return scores
+
+@tdec
+def is_text_positive(text: str) -> bool:
+    """True if tweet has positive compound sentiment, False otherwise."""
+    sia = SentimentIntensityAnalyzer()
+    return sia.polarity_scores(text)["compound"] > 0
+
+import pathlib
+def path_bs2fs(path: str):
+    p = pathlib.PureWindowsPath(path)
+    print('\'' + p.as_posix() + '\'')
+    
+    
+@tdec
+def create_video_from_images(*extensions, image_dir, output_video_name, fps = 30):
+    images = get_files_in_dir(*extensions, path = image_dir, fullpath = True)
+    frame = cv2.imread(images[0])
+    height, width, layers = frame.shape
+    video = cv2.VideoWriter(output_video_name, 0, fps, (width,height))
+    for image in images:
+        video.write(cv2.imread(image))
+    cv2.destroyAllWindows()
+    video.release()
+    
