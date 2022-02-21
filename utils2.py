@@ -1704,6 +1704,7 @@ class Viz():
     '''Class used to create a variety of visualizations such as barplots, lineplots, pairplots, heatmaps etc in an efficient manner'''
     
     def __init__(self, df = None, figsize = (10,6)):
+        self.df = df
         if self.df is not None:
             self.df = df.copy(deep = True)
         self.figsize = figsize 
@@ -1711,10 +1712,9 @@ class Viz():
 
     def check_df(self, df):
         '''Helper function to check if dataframe object is not None'''
-        if self.df is not None:
-            self.df = df
-        else:
-            raise ValueError('Dataframe object needs to be passed during either object instantiation or method call''')
+        if df: return df
+        if self.df is not None: df = self.df 
+        if df is None: raise ValueError('Dataframe object needs to be passed during either object instantiation or method call''')
         return df 
 
     def set_decorations(self, ax, **kwargs):
@@ -1725,11 +1725,11 @@ class Viz():
         if 'xlim' in kwargs: plt.xlim(kwargs['xlim'][0], kwargs['xlim'][1])
         if 'ylim' in kwargs: plt.xlim(kwargs['ylim'][0], kwargs['ylim'][1])     
         if 'legend' in kwargs: plt.legend(bbox_to_anchor = kwargs['legend'], loc = 'upper center')
-        if 'rotation' in kwargs: plt.xticks(rotation = rotation)
         if 'xticklocs' in kwargs:
             ax.set_xticks(kwargs['xticklocs'])
-            if 'rotation' in kwargs:
-                ax.set_xticklabels(kwargs['xticklocs'], rotation = kwargs['rotation'])
+            if 'xticklabels' in kwargs:
+                ax.set_xticklabels(kwargs['xticklabels'])
+        if 'rotation' in kwargs: plt.xticks(rotation = kwargs['rotation'])
         if 'vlines' in kwargs:
             trans = ax_get_axis_transform()
             for vline in kwargs['vlines']:
@@ -1885,34 +1885,35 @@ class Viz():
         return fig, ax
                              
                              
-    def make_barplot(self, x = '', y = '', df = None, barwidth = 0.9, ylim_scalefactor = 1.1, rotation = 0, hline = False, vline = False, barh = False, label_adj = 1, **kwargs):
+    def make_barplot(self, x = '', height = '', df = None, barwidth = 0.9, ylim_scalefactor = 1.1, hline = False, vline = False, barh = False, label_adj = 1, annots = False, **kwargs):
         '''Method for creating a barplot'''
         df = self.check_df(df)
         fig, ax = plt.subplots(figsize = self.figsize)
         ax = self.set_decorations(ax, **kwargs)
-        if not barh:
-            ax = df.plot.bar(x = x, y = y, align = 'center', alpha = 0.5, width = barwidth)
-            rects = ax.patches
-            ymin, ymax = plt.ylim()
-            plt.ylim(ymin, ymax * ylim_scalefactor)
-            labels = [np.round(val, 1) for yval in list(df[y])]
-            for rect, label in zip(rects, labels):
-                height = rect.get_height()
-                ax.text(rect.get_x() + rect.get_width / 2, height + label_adj, label, ha = 'center', va = 'bottom')
-                if hline: 
-                    mean = df[y].mean()
-                    ax.axhline(mean, color = 'black', linewidth = 2, linestyle = 'dashed', label = 'mean: {:.1f}'.format(mean))
-                    plt.legend(bbox_to_anchor = (1.0, 1), loc = 'upper center')
-        else:
-            y_pos = np.arange(len(list(df[y])))
-            ax = df.plot.bar(x = y_pos, y = y, align = 'center', alpha = 0.5, width = barwidth)
+        if barh:
+            y_pos = np.arange(len(list(df[height])))
+            ax.bar(x = y_pos, height = height, align = 'center', width = barwidth)
             rects = ax.patches
             ax.set_yticks(y_pos)
             ax.invert_yaxis()
             if vline:
-                mean = df[y].mean()
+                mean = df[height].mean()
                 ax.axvline(mean, color = 'black', linewidth = 2, linestyle = 'dashed', label = 'mean: {:.1f}'.format(mean))
                 plt.legend(bbox_to_anchor = (1.0, 1), loc = 'upper center')
+        else:
+            ax.bar(range(len(df[x])), height = df[height], align = 'center', width = barwidth) 
+            rects = ax.patches
+            ymin, ymax = plt.ylim()
+            plt.ylim(ymin, ymax * ylim_scalefactor)
+            if annots:
+                labels = [np.round(yval, 1) for yval in list(df[height])]
+                for rect, label in zip(rects, labels):
+                    height = rect.get_height()
+                    ax.text(rect.get_x() + rect.get_width() / 2, height + label_adj, label, ha = 'center', va = 'bottom')
+                    if hline: 
+                        mean = df[y].mean()
+                        ax.axhline(mean, color = 'black', linewidth = 2, linestyle = 'dashed', label = 'mean: {:.1f}'.format(mean))
+                        plt.legend(bbox_to_anchor = (1.0, 1), loc = 'upper center')       
         ax.set_facecolor('xkcd:white')
         self.download_fig(**kwargs)
         fig = ax.get_figure()
@@ -1939,6 +1940,16 @@ class Viz():
         fig = ax.get_figure()
         fig.tight_layout()
         return fig, ax
+    
+    def get_subplots(self, *series, nplots = 2, returnfig = False, **kwargs):
+        fig, ax = plt.subplots(nplots, figsize = self.figsize)
+        for i in range(nplots):
+            ax[i].plot(series[i])
+            ax[i] = self.set_decorations(ax[i], **kwargs)
+            if 'titles' in kwargs:
+                ax[i].set_title(kwargs['titles'][i])
+        self.download_fig(**kwargs)
+        if returnfig: return fig
     
     def make_choropleth(self, df = None, state_col = '', values_col = '', title = '', **kwargs):
         '''Method for creating a choropleth'''
@@ -1980,4 +1991,4 @@ def correlation(variable):
     for x in accepted_df.columns:
         corr1 = accepted_df[x].corr(accepted_df[variable])
         dict_output[x] = abs(corr1)
-    return sorted(dict_output.items), key = lambda x: x[1], reverse = True)
+    return sorted((dict_output.items), key = lambda x: x[1], reverse = True)
