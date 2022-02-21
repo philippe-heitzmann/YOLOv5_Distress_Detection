@@ -1659,4 +1659,290 @@ def create_video_from_images(*extensions, image_dir, output_video_name, fps = 30
         video.write(cv2.imread(image))
     cv2.destroyAllWindows()
     video.release()
+
+@tdec
+def get_top_n_words(n_top_words, count_vectorizer, text_data):
+    '''
+    returns a tuple of the top n words in a sample and their 
+    accompanying counts, given a CountVectorizer object and text sample
+    '''
+    vectorized_headlines = count_vectorizer.fit_transform(text_data.values)
+    vectorized_total = np.sum(vectorized_headlines, axis=0)
+    word_indices = np.flip(np.argsort(vectorized_total)[0,:], 1)
+    word_values = np.flip(np.sort(vectorized_total)[0,:],1)
+    
+    word_vectors = np.zeros((n_top_words, vectorized_headlines.shape[1]))
+    for i in range(n_top_words):
+        word_vectors[i,word_indices[0,i]] = 1
+
+    words = [word[0].encode('ascii').decode('utf-8') for 
+             word in count_vectorizer.inverse_transform(word_vectors)]
+
+    return (words, word_values[0,:n_top_words].tolist()[0])
+
+
+
+### VIZ ###
+
+import matplotlib.pyplot as plt
+import seaborn as sns
+sns.set_style('white')
+
+import plotly.offline as pyo
+import plotly.graph_objs as go
+from plotly.offline import iplot, plot
+
+class Viz():
+    '''Class used to create a variety of visualizations such as barplots, lineplots, pairplots, heatmaps etc in an efficient manner'''
+    
+    def __init__(self, df = None, figsize = (10,6)):
+        if self.df is not None:
+            self.df = df.copy(deep = True)
+        self.figsize = figsize 
+        print(f'Initiated with figsize {figsize}') 
+
+    def check_df(self, df):
+        '''Helper function to check if dataframe object is not None'''
+        if self.df is not None:
+            self.df = df
+        else:
+            raise ValueError('Dataframe object needs to be passed during either object instantiation or method call''')
+        return df 
+
+    def set_decorations(self, ax, **kwargs):
+        '''Helper function setting figure decorations such as title, xlabel, ylabel, etc if provided as kwargs'''
+        if 'title' in kwargs: ax.set_title(kwargs['title'][0], fontsize = kwargs['title'][1])
+        if 'xlabel' in kwargs: ax.set_xlabel(kwargs['xlabel'][0], fontsize = kwargs['xlabel'][1])
+        if 'ylabel' in kwargs: ax.set_xlabel(kwargs['ylabel'][0], fontsize = kwargs['ylabel'][1])
+        if 'xlim' in kwargs: plt.xlim(kwargs['xlim'][0], kwargs['xlim'][1])
+        if 'ylim' in kwargs: plt.xlim(kwargs['ylim'][0], kwargs['ylim'][1])     
+        if 'legend' in kwargs: plt.legend(bbox_to_anchor = kwargs['legend'], loc = 'upper center')
+        if 'rotation' in kwargs: plt.xticks(rotation = rotation)
+        if 'xticklocs' in kwargs:
+            ax.set_xticks(kwargs['xticklocs'])
+            if 'rotation' in kwargs:
+                ax.set_xticklabels(kwargs['xticklocs'], rotation = kwargs['rotation'])
+        if 'vlines' in kwargs:
+            trans = ax_get_axis_transform()
+            for vline in kwargs['vlines']:
+                plt.axvline(x = vline, linestyle = '--', color = 'red', linewidth = 0.5)
+                plt.text(vline, 0.88, str(vline), transform = trans, fontsize = 10, color = 'black')
+        if 'hlines' in kwargs:
+            for hline in kwargs['vlines']:
+                plt.axhline(x = hline, linestyle = '--', color = 'red', linewidth = 0.5)
+                plt.text(0.05, hline + 0.025, str(hline), transform = trans, fontsize = 10, color = 'black')
+        if 'points' in kwargs and 'col' in kwargs:
+            for point in kwargs['points']:
+                ax.plot(point, self.df.loc[self.df['TIME_DIM_NB2'] == point][[kwargs['col']]].iloc[0,0], 'or')
+        plt.grid(False)
+        return ax 
+                             
+    @staticmethod
+    def get_xticks(df, col, n):
+        return [x for x in range(0, len(df[col].unique()), n)]
+                             
+    def download_fig(self, **kwargs):
+        if 'download' in kwargs and kwargs['download']:
+            filename = 'plot' + '{:02d}'.format(datetime.datetime.now().month) + '{:02d}'.format(datetime.datetime.now().day) + '{:02d}'.format(datetime.datetime.now().hour) + '{:02d}'.format(datetime.datetime.now().minute) + '.png'
+            plt.savefig(filename, bbox_inches = 'tight')
+            print(f'Saved fig under filename {filename}')
+                             
+    def make_hist(self, *cols, df = None, num_bins = 50, **kwargs):
+        '''Method for creating a histogram'''
+        df = self.check_df(df)
+        fig, ax = plt.subplots(figsize = self.figsize)
+        ax = self.set_decorations(ax, **kwargs)
+        for col in cols:
+            n, bins, patches = ax.hist(df[col], bins = num_bins)
+        plt.gca().legend(cols)
+        self.download_fig(**kwargs)
+        fig = ax.get_figure()
+        fig.tight_layout()
+        return fig, ax
+                             
+    def make_densityplot(self, *cols, df = None, **kwargs):
+        '''Method for creating a density plot using seaborn kdeplot to visualize data in a manner analogous to a continuous probability distribution'''
+        df = self.check_df(df)
+        fig, ax = plt.subplots(figsize = self.figsize)
+        ax = self.set_decorations(ax, **kwargs)
+        for col in cols:
+            sns.kdeplot(df[col], shade = True, label = 'Cyl=4', alpha = 0.5)
+        self.download_fig(**kwargs)
+        fig = ax.get_figure()
+        fig.tight_layout()
+        return fig, ax
+                             
+    def make_boxplot(self, x = '', y = '', df = None, **kwargs):
+        '''Method for creating a boxplot using seaborn function'''
+        df = self.check_df(df)
+        fig, ax = plt.subplots(figsize = self.figsize)
+        ax = self.set_decorations(ax, **kwargs)
+        sns.boxplot(x = x, y = y, data = df, notch = False)
+        medians_dict = {grp[0]:grp[1][y].median() for grp in df.groupby(x)}
+        xticklabels = [x.get_text() for x in plt.gca().get_xticklabels()]
+        n_obs = df.groupby(x)[y].size().values
+        for (x, xticklabel), n_ob in zip(enumerate(xticklabels), n_obs):
+            plt.text(x, medians_dict[xtick_label] * 1.01, '#obs: ' + str(n_ob), horizontalalignment = 'center', fontdict = {'size':8}, color = 'white')
+        self.download_fig(**kwargs)
+        fig = ax.get_figure()
+        fig.tight_layout()
+        return fig, ax
+    
+    def make_pairplot(self, *cols, df = None, **kwargs):
+        '''Method for creating a pairplot'''
+        df = self.check_df(df)
+        fig, ax = plt.subplots(figsize = self.figsize)
+        ax = self.set_decorations(ax, **kwargs)
+        sns.pairplot(df[list(cols)], kind = 'scatter', hue=group, plot_kw = dict(s=80, edgecolor = 'white', linewidth = 2.5))
+        self.download_fig(**kwargs)
+        fig = ax.get_figure()
+        fig.tight_layout()
+        return fig, ax
+                             
+    def make_divergingbars(self, x = '', y = '', df = None, linewidth = 5, **kwargs):
+        '''Method for creating a diverging bars plot'''
+        df = self.check_df(df)
+        fig, ax = plt.subplots(figsize = self.figsize)
+        ax = self.set_decorations(ax, **kwargs)
+        df['colors'] = ['red' if val < 0 else 'green' for val in df[x]]
+        ptl.hlines(y = df[y], xmin = 0, xmax = df[x], color = df.colors, alpha = 0.4, linewidth = linewidth)
+        plt.grid(linestyle='--', alpha = 0.5)
+        self.download_fig(**kwargs)
+        fig = ax.get_figure()
+        fig.tight_layout()
+        return fig, ax
+                             
+    def make_scatter(self, *cols, x = 'TIME_DIM', y = '', group = None, df = None, timeseries = False, bestfit = False, linewidth = 3, **kwargs):
+        '''Method for creating a simple scatterplot with boolean flag bestfit option to create a best fit line through data'''
+        df = self.check_df(df)
+        fig, ax = plt.subplots(figsize = self.figsize)
+        ax = self.set_decorations(ax, **kwargs)
+        if bestfit:
+            sns.lmplot(x=x, y=y, hue=group, data=df, height=self.figsize[0], aspect=1.6, robust = True, palette = 'tab10', scatter_kws=dict(s=60, linewidths=0.7, egecolors = 'black'))
+        else:
+            for col in cols:
+                if 'marker' in kwargs:
+                    plt.plot(x, col, data = df, markevery = kwargs['markers'], linewidth = linewidth)
+                else: plt.plot(x, col, data = df, linewidth = linewidth)
+        if timeseries:
+            #updating formatting of xtick labels in case our xaxis xticklabels are in date format for legibility purposes
+            xtick_locations = df.index.to_list()[::12]
+            xtick_labels = [x[:4] for x in df[x].tolist()[::12]]
+            plt.xticks(ticks=xtick_locations, labels = xtick_labels, rotation = 0, fontsize = 12, horizontalalignment = 'center', alpha = 0.7)
+            plt.yticks(fontsize=12, alpha = 0.7)
+        plt.grid(axis = 'both', alpha = 0.3)
+        self.download_fig(**kwargs)
+        fig = ax.get_figure()
+        fig.tight_layout()
+        return fig, ax
+                             
+    def make_marginalhist(self, dfs, x, y, xg, yg, group = '', multi = True, df = None, **kwargs):
+        '''Method for creating a marginal histogram showing both distributions and interactions of two numerical variables side by side'''
+        df = self.check_df(df)
+        fig = plt.figure(figsize = (self.figsize[0], self.figsize[0]))
+        ax = self.set_decorations(ax, **kwargs)
+        if multi:
+            df = dfs[0]
+            dfg = dfs[1]
+        else:
+            df = dfs[0]
+            dfg = dfs[0]
+        grid = plt.GridSpec(4,4, hspace = 0.5, wspace = 0.2)
+        ax_main = fig.add_subplot(grid[:-1, :-1])
+        ax_right = fig.add_subplot(grid[:-1, -1])
+        ax_bottom = fig.add_subplot(grid[-1, :-1])
+        ax_main.scatter(xg, yg, s=self.figsize[0] * 3, c = group, alpha = 0.9, data = dfg, cmap = 'tab10', edgecolors = 'gray', linewidths = 0.5)
+        #bottom histogram
+        ax_bottom.hist(df[x], 40, orientation = 'vertical', color = 'deeppink')
+        ax_bottom.invert_yaxis()
+        #right histogram
+        ax_right.hist(df[y], 40, orientation = 'horizontal', color = 'deeppink')
+        ylabel = 'average ' + y 
+        ax_main = self.set_decorations(ax_main, title = f'Plot of {x} vs {y}', xlabel = x, ylabel = ylabel, **kwargs)                             
+        plt.xticks(rotation = 45)
+        self.download_fig(**kwargs)
+        fig = ax.get_figure()
+        fig.tight_layout()
+        return fig, ax
+    
+    def make_catplot(self, x = '', y = '', group = '', df = None, **kwargs):
+        '''Method for creating categorical plots'''
+        df = self.check_df(df)
+        fig, ax = plt.subplots(figsize = self.figsize)
+        ax = self.set_decorations(ax, **kwargs)
+        g = sns.catplot(x = x, y = y, col = group, data = df, saturation = 0.5, kind = 'bar', ci=None, aspect = 0.5)
+        self.download_fig(**kwargs)
+        fig = ax.get_figure()
+        fig.tight_layout()
+        return fig, ax
+                             
+                             
+    def make_barplot(self, x = '', y = '', df = None, barwidth = 0.9, ylim_scalefactor = 1.1, rotation = 0, hline = False, vline = False, barh = False, label_adj = 1, **kwargs):
+        '''Method for creating a barplot'''
+        df = self.check_df(df)
+        fig, ax = plt.subplots(figsize = self.figsize)
+        ax = self.set_decorations(ax, **kwargs)
+        if not barh:
+            ax = df.plot.bar(x = x, y = y, align = 'center', alpha = 0.5, width = barwidth)
+            rects = ax.patches
+            ymin, ymax = plt.ylim()
+            plt.ylim(ymin, ymax * ylim_scalefactor)
+            labels = [np.round(val, 1) for yval in list(df[y])]
+            for rect, label in zip(rects, labels):
+                height = rect.get_height()
+                ax.text(rect.get_x() + rect.get_width / 2, height + label_adj, label, ha = 'center', va = 'bottom')
+                if hline: 
+                    mean = df[y].mean()
+                    ax.axhline(mean, color = 'black', linewidth = 2, linestyle = 'dashed', label = 'mean: {:.1f}'.format(mean))
+                    plt.legend(bbox_to_anchor = (1.0, 1), loc = 'upper center')
+        else:
+            y_pos = np.arange(len(list(df[y])))
+            ax = df.plot.bar(x = y_pos, y = y, align = 'center', alpha = 0.5, width = barwidth)
+            rects = ax.patches
+            ax.set_yticks(y_pos)
+            ax.invert_yaxis()
+            if vline:
+                mean = df[y].mean()
+                ax.axvline(mean, color = 'black', linewidth = 2, linestyle = 'dashed', label = 'mean: {:.1f}'.format(mean))
+                plt.legend(bbox_to_anchor = (1.0, 1), loc = 'upper center')
+        ax.set_facecolor('xkcd:white')
+        self.download_fig(**kwargs)
+        fig = ax.get_figure()
+        fig.tight_layout()
+        return fig, ax
+                         
+    def make_corrheatmap(self, df = None, color = 'Blues', ticks_fontisze = 14, text_fontsize = 14, xtick_rotation = 30, **kwargs):
+        '''Method for creating a correlation heatmap'''
+        df = self.check_df(df)
+        fig, ax = plt.subplots(figsize = self.figsize)
+        ax = self.set_decorations(ax, **kwargs)
+        numerics = ['int16','int32','int64','float16','float32','float64']
+        df = df.select_dtypes(include = numerics)
+        df = df.corr()
+        plt.pcolor(df, cmap = color)
+        plt.yticks(np.arange(0.5, len(df.index), 1), df.index, fontsize = ticks_fontsize, rotation = xtick_rotation)
+        plt.yticks(np.arange(0.5, len(df.index), 1), df.index, fontsize = ticks_fontsize)
+        plt.legend(bbox_to_anchor = (1.0,1), loc = 'upper_center')
+        for x, y in zip(list(range(df.shape[1])), list(range(df.shape[0]))):
+            if df.iloc[y, x] >= 0.5: fontcolor = 'white'
+            else: fontcolor = 'black'
+            plt.text(x + 0.5, y + 0.5, '%.2f' % df.iloc[y, x], horizontalalignment = 'center', verticalalignment = 'center', color = fontcolor, fontsize = text_fontsize)
+        self.download_fig(**kwargs)
+        fig = ax.get_figure()
+        fig.tight_layout()
+        return fig, ax
+    
+    def make_choropleth(self, df = None, state_col = '', values_col = '', title = '', **kwargs):
+        '''Method for creating a choropleth'''
+        df = self.check_df(df)
+        data = [dict(type = 'choropleth', autocolorscale = False, locations = df[state_col], z = df[values_col], locationmode = 'USA=states', marker = dict(line=dict(color = 'rgb(255,255,255)', width = 2)),colorbar = dict(title=title))]
+        layout = dict(title = title, geo = dict(scope = 'usa', projection = dict(type='albers usa'), lakecolor = 'rgb(255,255,255)'))
+        fig = dict(data = data, layout = layout)
+        self.download_fig(**kwargs)
+        return pyo.iplot(fig, filename = 'choropleth-map')
+                
+            
+                          
+       
+        
     
