@@ -973,6 +973,14 @@ def dropcol(df):
     except: print('Could not drop Unnamed: 0 col')
     return df
 
+def dropcols(*dropcols, df):
+    try:
+        for dropcol in dropcols:
+            df = df.drop(dropcol, axis = 1)
+    except: print(f'Could not drop {dropcol}')
+    return df
+
+
 
 class TorchDataset(torch.utils.data.Dataset):
     def __init__(self, root, data_file, transforms=None):
@@ -1942,7 +1950,34 @@ class Viz():
         return pyo.iplot(fig, filename = 'choropleth-map')
                 
             
-                          
-       
-        
     
+    
+#creating function to quickly get an idea of values that comprise feature 
+def variable_expl(variable):
+    print(accepted_df[variable].value_counts())
+    print(' ')
+    print('Number of NA\'s is:', accepted_df[variable].isna().sum())
+    print('Number of unique values is:', accepted_df[variable].nunique())
+    if accepted_df[variable].dtype == 'float64' or accepted_df[variable].dtype == 'int64':
+        print('Mean is:', np.mean(accepted_df[variable]))
+        print('Std.Dev is:', np.std(accepted_df[variable]))
+
+#creating function to return correlation value between two features 
+def corr_value(df, variable1, variable2):
+    print(df[variable1].corr(df[variable2]))
+
+#creating a function that can print full series values in Jupyter notebook
+def print_full(x):
+    pd.set_option('display.max_rows', len(x))
+    print(x)
+    pd.reset_option('display.max_rows')
+    
+#creating a function to return correlation values between numeric variables
+from collections import defaultdict
+
+def correlation(variable):
+    dict_output = defaultdict(int)
+    for x in accepted_df.columns:
+        corr1 = accepted_df[x].corr(accepted_df[variable])
+        dict_output[x] = abs(corr1)
+    return sorted(dict_output.items), key = lambda x: x[1], reverse = True)
