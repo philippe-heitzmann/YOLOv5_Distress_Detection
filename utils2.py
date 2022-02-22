@@ -1678,15 +1678,102 @@ def get_top_n_words(n_top_words, count_vectorizer, text_data):
     vectorized_total = np.sum(vectorized_headlines, axis=0)
     word_indices = np.flip(np.argsort(vectorized_total)[0,:], 1)
     word_values = np.flip(np.sort(vectorized_total)[0,:],1)
-    
     word_vectors = np.zeros((n_top_words, vectorized_headlines.shape[1]))
     for i in range(n_top_words):
         word_vectors[i,word_indices[0,i]] = 1
-
-    words = [word[0].encode('ascii').decode('utf-8') for 
-             word in count_vectorizer.inverse_transform(word_vectors)]
-
+    words = [word[0].encode('ascii').decode('utf-8') for  word in count_vectorizer.inverse_transform(word_vectors)]
     return (words, word_values[0,:n_top_words].tolist()[0])
+
+
+def inv_transform_count_vectorizer(count_vectorizer, word_vector):
+    words = [word for word in count_vectorizer.inverse_transform(word_vector)]
+    return words
+
+from sklearn.feature_extraction.text import CountVectorizer
+@tdec
+def words2vec(data, max_features = 40000):
+    count_vectorizer = CountVectorizer(stop_words='english', max_features=max_features)
+    document_term_matrix = count_vectorizer.fit_transform(data)
+    return count_vectorizer, document_term_matrix
+
+
+@tdec
+def get_top_words(n, n_topics, keys, document_term_matrix, count_vectorizer):
+    '''
+    returns a list of n_topic strings, where each string contains the n most common words in a predicted category, in order
+    '''
+    top_word_indices = []
+    for topic in range(n_topics):
+        temp_vector_sum = 0
+        for idx, i in enumerate(keys):
+            if i == topic:
+                temp_vector_sum += document_term_matrix[idx]
+        if not(isinstance(temp_vector_sum, int)):
+            temp_vector_sum = temp_vector_sum.toarray()
+            top_n_word_indices = np.flip(np.argsort(temp_vector_sum)[0][-n:],0)
+            top_word_indices.append(top_n_word_indices)
+    top_words = []
+    for topic in top_word_indices:
+        topic_words = []
+        for index in topic:
+            temp_word_vector = np.zeros((1,document_term_matrix.shape[1]))
+            temp_word_vector[:,index] = 1
+            the_word = count_vectorizer.inverse_transform(temp_word_vector)[0][0]
+            topic_words.append(the_word.encode('ascii').decode('utf-8'))
+        top_words.append(" ".join(topic_words))         
+    return top_words
+
+
+def get_keys(topic_matrix):
+    '''
+    returns an integer list of predicted topic categories for a given topic matrix
+    '''
+    keys = topic_matrix.argmax(axis=1).tolist()
+    return keys
+
+def get_mean_topic_vectors(keys, two_dim_vectors, n_topics = 8):
+    '''
+    returns a list of centroid vectors from each predicted topic category
+    '''
+    mean_topic_vectors = []
+    for t in range(n_topics):
+        articles_in_that_topic = []
+        for i in range(len(keys)):
+            if keys[i] == t:
+                articles_in_that_topic.append(two_dim_vectors[i])    
+        
+        articles_in_that_topic = np.vstack(articles_in_that_topic)
+        mean_article_in_that_topic = np.mean(articles_in_that_topic, axis=0)
+        mean_topic_vectors.append(mean_article_in_that_topic)
+    return mean_topic_vectors
+
+
+from collections import Counter
+def keys_to_counts(keys):
+    '''
+    returns a tuple of topic categories and their accompanying magnitudes for a given list of keys
+    '''
+    count_pairs = Counter(keys).items()
+    categories, counts = [pair[0] for pair in count_pairs], [pair[1] for pair in count_pairs]
+    return (categories, counts)
+
+
+def lemmatize_and_stem(text):
+    stemmer = SnowballStemmer('english')
+    return stemmer.stem(WordNetLemmatizer().lemmatize(text, pos='v'))
+
+import gensim
+from gensim.utils import simple_preprocess
+from gensim.parsing.preprocessing import STOPWORDS
+from nltk.stem import WordNetLemmatizer, SnowballStemmer
+from nltk.stem.porter import *
+
+def lemmatize_stem_remove_stopwords(text):
+    result = []
+    for token in gensim.utils.simple_preprocess(text):
+        if token not in gensim.parsing.preprocessing.STOPWORDS and len(token) > 3:
+            result.append(lemmatize_and_stem(token))
+    return result
 
 
 
@@ -1712,16 +1799,16 @@ class Viz():
 
     def check_df(self, df):
         '''Helper function to check if dataframe object is not None'''
-        if df: return df
+        if df is not None: return df
         if self.df is not None: df = self.df 
-        if df is None: raise ValueError('Dataframe object needs to be passed during either object instantiation or method call''')
+        else: raise ValueError('Dataframe object needs to be passed during either object instantiation or method call''')
         return df 
 
     def set_decorations(self, ax, **kwargs):
         '''Helper function setting figure decorations such as title, xlabel, ylabel, etc if provided as kwargs'''
         if 'title' in kwargs: ax.set_title(kwargs['title'][0], fontsize = kwargs['title'][1])
         if 'xlabel' in kwargs: ax.set_xlabel(kwargs['xlabel'][0], fontsize = kwargs['xlabel'][1])
-        if 'ylabel' in kwargs: ax.set_xlabel(kwargs['ylabel'][0], fontsize = kwargs['ylabel'][1])
+        if 'ylabel' in kwargs: ax.set_ylabel(kwargs['ylabel'][0], fontsize = kwargs['ylabel'][1])
         if 'xlim' in kwargs: plt.xlim(kwargs['xlim'][0], kwargs['xlim'][1])
         if 'ylim' in kwargs: plt.xlim(kwargs['ylim'][0], kwargs['ylim'][1])     
         if 'legend' in kwargs: plt.legend(bbox_to_anchor = kwargs['legend'], loc = 'upper center')
@@ -1919,23 +2006,39 @@ class Viz():
         fig = ax.get_figure()
         fig.tight_layout()
         return fig, ax
+    
+    def make_grouped_barplot(self, *cols, groups = '', df = None, **kwargs):
+        '''Method for creating a grouped barplot'''
+        df = self.check_df(df)
+        x = np.arange(len(groups))
+        width = 0.35
+        fig, ax = plt.subplots(figsize = self.figsize)
+        ax = self.set_decorations(ax, **kwargs)
+        for col in cols:
+            ax.bar(x - width/2, df[col], width, label='test')
+        self.download_fig(**kwargs)
+        fig = ax.get_figure()
+        fig.tight_layout()
+        return fig, ax
                          
-    def make_corrheatmap(self, df = None, color = 'Blues', ticks_fontisze = 14, text_fontsize = 14, xtick_rotation = 30, **kwargs):
-        '''Method for creating a correlation heatmap'''
+    def make_corrheatmap(self, df = None, color = 'Blues', ticks_fontsize = 14, text_fontsize = 14, **kwargs):
+        '''Method for creating a correlation heatmap
+        Inputs: df should be prepreprocessed using df.corr()  for instance'''
         df = self.check_df(df)
         fig, ax = plt.subplots(figsize = self.figsize)
         ax = self.set_decorations(ax, **kwargs)
-        numerics = ['int16','int32','int64','float16','float32','float64']
-        df = df.select_dtypes(include = numerics)
-        df = df.corr()
+#         numerics = ['int16','int32','int64','float16','float32','float64']
+#         df = df.select_dtypes(include = numerics)
+#         df = df.corr()
         plt.pcolor(df, cmap = color)
-        plt.yticks(np.arange(0.5, len(df.index), 1), df.index, fontsize = ticks_fontsize, rotation = xtick_rotation)
+        plt.xticks(np.arange(0.5, len(df.columns), 1), df.columns, fontsize = ticks_fontsize)
         plt.yticks(np.arange(0.5, len(df.index), 1), df.index, fontsize = ticks_fontsize)
-        plt.legend(bbox_to_anchor = (1.0,1), loc = 'upper_center')
-        for x, y in zip(list(range(df.shape[1])), list(range(df.shape[0]))):
-            if df.iloc[y, x] >= 0.5: fontcolor = 'white'
-            else: fontcolor = 'black'
-            plt.text(x + 0.5, y + 0.5, '%.2f' % df.iloc[y, x], horizontalalignment = 'center', verticalalignment = 'center', color = fontcolor, fontsize = text_fontsize)
+        plt.legend(bbox_to_anchor = (1.0,1), loc = 'upper center')
+        for x in range(df.shape[0]):
+            for y in range(df.shape[1]):
+                if df.iloc[x, y] >= 0.5: fontcolor = 'white'
+                else: fontcolor = 'black'
+                plt.text(y + 0.5, x + 0.5, '%.0f' % df.iloc[x, y], horizontalalignment = 'center', verticalalignment = 'center', color = fontcolor, fontsize = text_fontsize)
         self.download_fig(**kwargs)
         fig = ax.get_figure()
         fig.tight_layout()
@@ -1948,6 +2051,8 @@ class Viz():
             ax[i] = self.set_decorations(ax[i], **kwargs)
             if 'titles' in kwargs:
                 ax[i].set_title(kwargs['titles'][i])
+            if 'xlabels' in kwargs:
+                ax[i].set_xlabel(kwargs['xlabels'][i])
         self.download_fig(**kwargs)
         if returnfig: return fig
     
