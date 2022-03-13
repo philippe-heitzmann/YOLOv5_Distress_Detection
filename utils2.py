@@ -1,5 +1,3 @@
-
-
 #data manipulation
 import numpy as np
 import pandas as pd
@@ -21,6 +19,9 @@ import cv2
 import torch
 import torchvision
 import torchvision.ops.boxes as bops
+
+#stats
+import statsmodels
 
 #ML 
 from sklearn.model_selection import train_test_split
@@ -1843,7 +1844,7 @@ class Viz():
                 plt.axvline(x = vline, linestyle = '--', color = 'red', linewidth = 0.5)
                 plt.text(vline, 0.88, str(vline), transform = trans, fontsize = 10, color = 'black')
         if 'hlines' in kwargs:
-            for hline in kwargs['vlines']:
+            for hline in kwargs['hlines']:
                 plt.axhline(x = hline, linestyle = '--', color = 'red', linewidth = 0.5)
                 plt.text(0.05, hline + 0.025, str(hline), transform = trans, fontsize = 10, color = 'black')
         if 'points' in kwargs and 'col' in kwargs:
@@ -1893,11 +1894,11 @@ class Viz():
         fig, ax = plt.subplots(figsize = self.figsize)
         ax = self.set_decorations(ax, **kwargs)
         sns.boxplot(x = x, y = y, data = df, notch = False)
-        medians_dict = {grp[0]:grp[1][y].median() for grp in df.groupby(x)}
+        medians_dict = {str(grp[0]):grp[1][y].median() for grp in df.groupby(x)}
         xticklabels = [x.get_text() for x in plt.gca().get_xticklabels()]
         n_obs = df.groupby(x)[y].size().values
         for (x, xticklabel), n_ob in zip(enumerate(xticklabels), n_obs):
-            plt.text(x, medians_dict[xtick_label] * 1.01, '#obs: ' + str(n_ob), horizontalalignment = 'center', fontdict = {'size':8}, color = 'white')
+            plt.text(x, medians_dict[xticklabel] * 1.05, '#obs: ' + str(n_ob), horizontalalignment = 'center', fontdict = {'size':8}, color = 'white')
         self.download_fig(**kwargs)
         fig = ax.get_figure()
         fig.tight_layout()
@@ -1939,7 +1940,8 @@ class Viz():
             plt.xticks(ticks=xtick_locations, labels = xtick_labels, rotation = 0, fontsize = 12, horizontalalignment = 'center', alpha = 0.7)
             plt.yticks(fontsize=12, alpha = 0.7)
         elif bestfit:
-            sns.lmplot(x=x, y=y, hue=group, data=df, height=self.figsize[0], aspect=1.6, robust = True, palette = 'tab10', scatter_kws=dict(s=60, linewidths=0.7, egecolors = 'black'))
+            sns.lmplot(x=x, y=y, hue=group, data=df, height=self.figsize[0], aspect=1.6, robust = True, palette = 'tab10', scatter_kws=dict(s=60, linewidths=0.7, edgecolors = 'black'))
+            return
         elif 'lineplot' in kwargs:
             for col in cols:
                 plt.plot(x, col, data = df, linewidth = linewidth, **kwargs)
@@ -2015,10 +2017,10 @@ class Viz():
             if annots:
                 labels = [np.round(yval, 1) for yval in list(df[height])]
                 for rect, label in zip(rects, labels):
-                    height = rect.get_height()
-                    ax.text(rect.get_x() + rect.get_width() / 2, height + label_adj, label, ha = 'center', va = 'bottom')
+                    rectheight = rect.get_height()
+                    ax.text(rect.get_x() + rect.get_width() / 2, rectheight + label_adj, label, ha = 'center', va = 'bottom')
                     if hline: 
-                        mean = df[y].mean()
+                        mean = df[height].mean()
                         ax.axhline(mean, color = 'black', linewidth = 2, linestyle = 'dashed', label = 'mean: {:.1f}'.format(mean))
                         plt.legend(bbox_to_anchor = (1.0, 1), loc = 'upper center')       
         ax.set_facecolor('xkcd:white')
