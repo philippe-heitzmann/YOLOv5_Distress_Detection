@@ -1468,128 +1468,134 @@ def test_cc_thresholds(df, range_thresholds):
 
 # Unsupervised ML
 
-# import hdbscan
-# from sklearn.cluster import KMeans
-# from sklearn.preprocessing import MinMaxScaler, StandardScaler
-# import plotly.graph_objects as go
-# import plotly.express as px 
+import hdbscan
+from sklearn.cluster import KMeans
+from sklearn.preprocessing import MinMaxScaler, StandardScaler
+import plotly.graph_objects as go
+import plotly.express as px 
 
-# def scale(df, cols, **kwargs):
-#     df = df.loc[:, cols]
-#     df = df.to_numpy()
-#     if 'scaletype' in kwargs and kwargs['scaletype'] == 'minmax':
-#         scaler = MinMaxScaler()
-#     else:
-#         scaler = StandardScaler()
-#     scaler.fit(df)
-#     X = scaler.transform(df)
-#     dff = pd.DataFrame(X, columns = cols)
-#     return dff, scaler
+def scale(df, cols, **kwargs):
+    df = df.loc[:, cols]
+    df = df.to_numpy()
+    if 'scaletype' in kwargs and kwargs['scaletype'] == 'minmax':
+        scaler = MinMaxScaler()
+    else:
+        scaler = StandardScaler()
+    scaler.fit(df)
+    X = scaler.transform(df)
+    dff = pd.DataFrame(X, columns = cols)
+    return dff, scaler
 
-# @tdec
-# def get_kmeans(data, cols, n_clusters = 3, random_state = 42, **kwargs):
-#     data, scaler = scale(df = data, cols = cols, **kwargs)
-#     kmeans = KMeans(n_clusters=n_clusters, init='k-means++', n_init = 10, tol = 1e-04, random_state = random_state)
-#     kmeans.fit(data)
-#     clusters = pd.DataFrame(data, columns = cols)
-#     clusters['label'] = kmeans.labels_
-#     polars = clusters.groupby('label').mean().reset_index()
-#     polar = pd.melt(polar, id_vars = ['label'])
-#     fig = px.line_polar(polar, r='value', theta = 'variable', color = 'label', line_close = True, height = 800, width = 1400)
-#     return fig, polar, clusters, scaler
+def get_elbow_plot(X, start = 1, end = 11, elbow_annot = None, random_state = 42):
+    inertia = []
+    for i in range(start, end):
+        kmeans = KMeans(n_clusters=i, init='k-means++', n_init = 10, tol = 1e-04, random_state = random_state)
+        kmeans.fit(X)
+        inertia.append(kmeans.inertia_)
+    fig = go.Figure(data = go.Scatter(x=np.arange(1,11), y= inertia))
+    if elbow_annot is not None:
+        annotation = dict(x=elbow_annot, y = inertia[elbow_annot - 1], xref = 'x', yref = 'y', text = 'Elbow!', showarrow = True, arrowhead = 7, ax = 20, ay = -40)
+        fig.update_layout(annotations =[annotation])
+    fig.update_layout(title='Inertia vs Cluster Number', xaxis = dict(range=[0,11], title = 'Cluster Number'), yaxis = {'title':'Inertia'})
+    return fig, inertia
 
-# def get_clusters(data, cols, cluster_labels):
-#     data = data[cols]
-#     clusters = pd.DataFrame(data, columns = cols)
-#     clusters['label'] = cluster_labels
-#     polar = clusters.groupby('label').mean().reset_index()
-#     polar = pd.melt(polar, id_vars = ['label'])
-#     fig = px.line_polar(polar, r = 'value', theta = 'variable', color = 'label', line_close = True, height = 800, width = 1400)
-#     return fig, polar, clusters, scaler
+@tdec
+def get_kmeans(data, cols, n_clusters = 3, random_state = 42, **kwargs):
+    data, scaler = scale(df = data, cols = cols, **kwargs)
+    kmeans = KMeans(n_clusters=n_clusters, init='k-means++', n_init = 10, tol = 1e-04, random_state = random_state)
+    kmeans.fit(data)
+    clusters = pd.DataFrame(data, columns = cols)
+    clusters['label'] = kmeans.labels_
+    polars = clusters.groupby('label').mean().reset_index()
+    polars = pd.melt(polars, id_vars = ['label'])
+    fig = px.line_polar(polars, r='value', theta = 'variable', color = 'label', line_close = True, height = 800, width = 1400)
+    return fig, polars, clusters, scaler
 
-# def inv_transform(data, scaler, cols, clusters):
-#     data_inv = scaler.inverse_transform(data)
-#     data_inv = pd.DataFrame(data_inv, columns = cols)
-#     data_inv['labels'] = clusters['label']
-#     cols = [col for col in data_inv.columns]
-#     groupby_dict = {}
-#     for idx, col in enumerate(cols):
-#         if idx == 0:
-#             groupby_dict[col] = ['mean', 'count']
-#             continue
-#         groupby_dict[col] = ['mean']
-#     df = data_inv.groupby('labels').agg(groupby_dict).reset_index()
-#     df_cols = ['_'.join(col) for col in [c for c in df.columns]]
-#     df.columns = df_cols
-#     df['perc'] = df.iloc[:,2] / df.iloc[:,2].sum()
-#     return df, data_inv
+def get_clusters(data, cols, cluster_labels):
+    data = data[cols]
+    clusters = pd.DataFrame(data, columns = cols)
+    clusters['label'] = cluster_labels
+    polar = clusters.groupby('label').mean().reset_index()
+    polar = pd.melt(polar, id_vars = ['label'])
+    fig = px.line_polar(polar, r = 'value', theta = 'variable', color = 'label', line_close = True, height = 800, width = 1400)
+    return fig, polar, clusters, scaler
 
-# def get_hdbscan_cluster_stats_unscaled(data, scaler, cols, clusters):
-#     data_inv['labels'] = clusters['label']
-#     cols = [col for col in data_inv.columns]
-#     groupby_dict = {}
-#     for idx, col in enumerate(cols):
-#         if idx == 0:
-#             groupby_dict[col] = ['mean', 'count']
-#             continue
-#         groupby_dict[col] = ['mean']
-#     df = data_inv.groupby('labels').agg(groupby_dict).reset_index()
-#     df_cols = ['_'.join(col) for col in [c for c in df.columns]]
-#     df.columns = df_cols
-#     df['perc'] = df.iloc[:,2] / df.iloc[:,2].sum()
-#     return df, data_inv
+def inv_transform(data, scaler, cols, clusters):
+    data_inv = scaler.inverse_transform(data)
+    data_inv = pd.DataFrame(data_inv, columns = cols)
+    data_inv['labels'] = clusters['label']
+    cols = [col for col in data_inv.columns]
+    groupby_dict = {}
+    for idx, col in enumerate(cols):
+        if idx == 0:
+            groupby_dict[col] = ['mean', 'count']
+            continue
+        groupby_dict[col] = ['mean','median','std']
+    df = data_inv.groupby('labels').agg(groupby_dict).reset_index()
+    df_cols = ['_'.join(col) for col in [c for c in df.columns]]
+    df.columns = df_cols
+    df['perc'] = df.iloc[:,2] / df.iloc[:,2].sum()
+    return df, data_inv
+
+def get_hdbscan_cluster_stats_unscaled(data, scaler, cols, clusters):
+    data_inv = inv_transform2(data = data, scaler = scaler)
+    data_inv = pd.DataFrame(data_inv, columns = cols)
+    data_inv['labels'] = clusters['label']
+    cols = [col for col in data_inv.columns]
+    groupby_dict = {}
+    for idx, col in enumerate(cols):
+        if idx == 0:
+            groupby_dict[col] = ['mean', 'count']
+            continue
+        groupby_dict[col] = ['mean']
+    df = data_inv.groupby('labels').agg(groupby_dict).reset_index()
+    df_cols = ['_'.join(col) for col in [c for c in df.columns]]
+    df.columns = df_cols
+    df['perc'] = df.iloc[:,2] / df.iloc[:,2].sum()
+    return df, data_inv
     
-# def inv_transform2(data, scaler):
-#     data_inv = scaler.inverse_transform(data)
-#     return data_inv
+def inv_transform2(data, scaler):
+    data_inv = scaler.inverse_transform(data)
+    return data_inv
 
-# @tdec 
-# def HDBSCAN_hyperparameter_search(df, min_cluster_sizes, min_sample_sizes, scaler, cols):
-#     dfs =[]
-#     for min_cluster_size in min_cluster_sizes:
-#         for min_samples in min_samples_sizes:
-#             start_time = time.time()
-#             clusterer = hdbscan.HDBSCAN(min_cluster_size = min_cluster_size, min_samples = min_samples)
-#             cluster_labels = clusterer.fit_predict(df)
-#             clusters_unique = np.unique(cluster_labels)
-#             print(clusters_unique)
-#             clusters = pd.DataFrame(cluster_labels, columns = ['label'])
-#             dfg, data_inv = get_hdbscan_cluster_stats_unscaled(df, scaler, cols = cols, clusters = clusters)
-#             dfs.append((dfg, data_inv, clusters, min_cluster_size, min_samples))
-#             print('{} sec to complete HDBSCAN with {} min_cluster_size and {} min_samples'.format(np.round(time.time() - start_time, 0), min_cluster_size, min_samples))
-#     return dfs
+@tdec 
+def HDBSCAN_hyperparameter_search(df, min_cluster_sizes, min_sample_sizes, scaler, cols):
+    dfs =[]
+    for min_cluster_size in min_cluster_sizes:
+        for min_samples in min_sample_sizes:
+            start_time = time.time()
+            clusterer = hdbscan.HDBSCAN(min_cluster_size = min_cluster_size, min_samples = min_samples)
+            cluster_labels = clusterer.fit_predict(df)
+            clusters_unique = np.unique(cluster_labels)
+            print(clusters_unique)
+            clusters = pd.DataFrame(cluster_labels, columns = ['label'])
+            dfg, data_inv = get_hdbscan_cluster_stats_unscaled(df, scaler, cols = cols, clusters = clusters)
+            dfs.append((dfg, data_inv, clusters, min_cluster_size, min_samples))
+            print('{} sec to complete HDBSCAN with {} min_cluster_size and {} min_samples'.format(np.round(time.time() - start_time, 0), min_cluster_size, min_samples))
+    return dfs
 
-# def filter_hdbscan_dfs(dfs, noise_threshold):
-#     for dfg, data_inv, clusters, min_cluster_size, min_samples in dfs:
-#         if dfg.iloc[0,-1] < noise_threshold:
-#             print(min_cluster_size, min_samples, '\n', dfg.head())
+def filter_hdbscan_dfs(dfs, noise_threshold):
+    for dfg, data_inv, clusters, min_cluster_size, min_samples in dfs:
+        if dfg.iloc[0,-1] < noise_threshold:
+            print(min_cluster_size, min_samples, '\n', dfg.head())
             
-# def get_hdbscan_polar(dfg, data, clusters, min_cluster_size, min_samples):
-#     print('Min Cluster size:', min_cluster_size, '| Min Sample Size:', min_samples)
-#     dfg = dfg[['labels_','tenure_mean','tenure_count','chdep_ind_mean','onln_signon_days_mean','di_bal_mean','atmdays_mean','mobile_signon_days_mean']]
-#     tenure_count = dfg['tenure_count']
-#     dfg = dfg.drop('tenure_count', axis = 1)
-#     polar = pd.melt(dfg, id_vars = ['labels_'])
-#     fig = px.line_polar(polar, r='value', theta = 'variable', color = 'labels_', line_close = True, height = 800, width = 1400)
-#     dfg['perc'] = tenure_count / tenure_count.sum()
-#     print(dfg)
-#     fig.show()
-#     return dfg
-            
-            
-# def get_elbow_plot(X, start = 1, end = 11, elbow_annot = None, random_state = 42):
-#     inertia = []
-#     for i in range(start, end):
-#         kmeans = KMeans(n_clusters=n_clusters, init='k-means++', n_init = 10, tol = 1e-04, random_state = random_state)
-#         kmeans.fit(X)
-#         inertia.append(kmeans.inertia_)
-#     fig = go.Figure(data = go.Scater(x=np.arange(1,11), y= inertia))
-#     if elbow_annot is not None:
-#         annotation = dict(x=elbow_annot, y = inertia[eblow_annot - 1], xref = 'x', yref = 'y', text = 'Elbow!', showarrow = True, arrowhead = 7, ax = 20, ay = -40)
-#         fig.update_layout(annotations =[annotation])
-#     fig.update_layout(title='Inertia vs Cluster Number', xaxis = dict(range=[0,11], title = 'Cluster Number'), yaxis = {'title':'Inertia'})
-#     return fig, inertia
-#     fig
+def get_hdbscan_polar(dfg, data, cols, clusters, min_cluster_size, min_samples):
+    print('Min Cluster size:', min_cluster_size, '| Min Sample Size:', min_samples)
+    dfg = dfg[cols]
+    tenure_count = dfg['tenure_count']
+    dfg = dfg.drop('tenure_count', axis = 1)
+    polar = pd.melt(dfg, id_vars = ['labels_'])
+    fig = px.line_polar(polar, r='value', theta = 'variable', color = 'labels_', line_close = True, height = 800, width = 1400)
+    dfg['perc'] = tenure_count / tenure_count.sum()
+    fig.show()
+    return dfg
+                    
+from sklearn.metrics import silhouette_score
+@tdec
+def get_silhouette_score(clusterer, X):
+    clusterer.fit(X)
+    label = clusterer.predict(X)
+    print(f'Silhouette Score: {silhouette_score(X, label)}')
            
 import nltk
 from nltk.sentiment import SentimentIntensityAnalyzer
@@ -1907,24 +1913,24 @@ class Viz():
         fig.tight_layout()
         return fig, ax
                              
-    def make_scatter(self, *cols, x = 'TIME_DIM', y = '', group = None, df = None, timeseries = False, bestfit = False, linewidth = 3, **kwargs):
+    def make_scatter(self, *cols, x = 'TIME_DIM', y = '', group = None, df = None, timeseries = False, bestfit = False, linewidth = 3, c = None, **kwargs):
         '''Method for creating a simple scatterplot with boolean flag bestfit option to create a best fit line through data'''
         df = self.check_df(df)
         fig, ax = plt.subplots(figsize = self.figsize)
         ax = self.set_decorations(ax, **kwargs)
-        if bestfit:
-            sns.lmplot(x=x, y=y, hue=group, data=df, height=self.figsize[0], aspect=1.6, robust = True, palette = 'tab10', scatter_kws=dict(s=60, linewidths=0.7, egecolors = 'black'))
-        else:
-            for col in cols:
-                if 'marker' in kwargs:
-                    plt.plot(x, col, data = df, markevery = kwargs['markers'], linewidth = linewidth)
-                else: plt.plot(x, col, data = df, linewidth = linewidth)
         if timeseries:
             #updating formatting of xtick labels in case our xaxis xticklabels are in date format for legibility purposes
             xtick_locations = df.index.to_list()[::12]
             xtick_labels = [x[:4] for x in df[x].tolist()[::12]]
             plt.xticks(ticks=xtick_locations, labels = xtick_labels, rotation = 0, fontsize = 12, horizontalalignment = 'center', alpha = 0.7)
             plt.yticks(fontsize=12, alpha = 0.7)
+        elif bestfit:
+            sns.lmplot(x=x, y=y, hue=group, data=df, height=self.figsize[0], aspect=1.6, robust = True, palette = 'tab10', scatter_kws=dict(s=60, linewidths=0.7, egecolors = 'black'))
+        elif 'lineplot' in kwargs:
+            for col in cols:
+                plt.plot(x, col, data = df, linewidth = linewidth, **kwargs)
+        else:
+            plt.scatter(df[cols[0]], df[cols[1]], c = c)
         plt.grid(axis = 'both', alpha = 0.3)
         self.download_fig(**kwargs)
         fig = ax.get_figure()
@@ -2097,3 +2103,30 @@ def correlation(variable):
         corr1 = accepted_df[x].corr(accepted_df[variable])
         dict_output[x] = abs(corr1)
     return sorted((dict_output.items), key = lambda x: x[1], reverse = True)
+
+
+### Data cleaning
+
+@tdec
+def get_outliers(df):
+    numerics = ['int16', 'int32', 'int64', 'float16', 'float32', 'float64']
+    newdf = df.select_dtypes(include=numerics)
+    dict_output = {} 
+    for col in newdf.columns:
+        quantile_series = newdf[col].quantile([0.25, 0.75])
+        q1, q3 = quantile_series.iloc[0], quantile_series.iloc[1]
+        iqr = q3 - q1
+        high_outlier_threshold = q3 + 1.5 * iqr
+        low_outlier_threshold = q1 - 1.5 * iqr
+        dict_output[col] = [idx for idx, val in enumerate(newdf[col]) if val < low_outlier_threshold or 
+                            val > high_outlier_threshold]
+    return dict_output
+
+def get_stats(*cols, df):
+    for col in cols:
+        quantile_series = df[col].quantile([0.25, 0.50, 0.75, 0, 1])
+        q1, q2, q3, min_, max_ = quantile_series.iloc[0], quantile_series.iloc[1], quantile_series.iloc[2], quantile_series.iloc[3], quantile_series.iloc[4]
+        iqr = q3 - q1
+        high_outlier_threshold = q3 + 1.5 * iqr
+        low_outlier_threshold = q1 - 1.5 * iqr
+    return q1, q2, q3, iqr, low_outlier_threshold, high_outlier_threshold, min_, max_
