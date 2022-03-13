@@ -66,13 +66,18 @@ def tdec(func):
     return inner 
 
 
-def show_im(path, **kwargs):
-    img = cv2.imread(path)
-    figure(figsize=(10, 10), dpi=80)
-    color = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-    if 'title' in kwargs:
-        plt.title(kwargs['title'])
-    plt.imshow(color)
+### Data Preprocessing ### 
+
+def get_col_stats(*cols, df, maxval = 10000, **kwargs):
+    for col in cols:
+        q1, q2, q3, iqr, low_outlier_threshold, high_outlier_threshold, min_, max_ = get_stats(col, df = df)
+        print('Outlier low and high thresholds:', low_outlier_threshold, high_outlier_threshold)
+        print(f'{col} min and max values:', min_, max_)
+        print('Number of detected potential outliers:', len(outlier_idx_dict[col]), 'or', np.round(len(outlier_idx_dict[col]) / df.shape[0] * 100, 1), '% of dataset values')
+        print(f'Number of values greater than {maxval}: ',df.loc[df[col] > maxval].shape[0])
+        viz0 = Viz(df=df, figsize = (7,4))
+        viz0.make_hist(col, num_bins = 100, **kwargs)
+        
     
     
 def get_lines(labelpath):
@@ -100,7 +105,16 @@ def get_files_in_dir(*extensions, path = './data/train/Japan/labels', show_folde
         return result, folders
     return result
 
+### Computer Vision ###
 
+def show_im(path, **kwargs):
+    img = cv2.imread(path)
+    figure(figsize=(10, 10), dpi=80)
+    color = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+    if 'title' in kwargs:
+        plt.title(kwargs['title'])
+    plt.imshow(color)
+    
 @tdec
 def check_img_labels_match(imgspath, labelspath, imgsextension, labelsextension, **kwargs):
     if 'show_folders' in kwargs and kwargs['show_folders']:
