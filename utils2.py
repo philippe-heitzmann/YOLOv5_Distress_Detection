@@ -52,7 +52,7 @@ import xml.etree.ElementTree as ET
 #string manipulation
 import re
 import string
-  
+
 import sys
 sys.path.append('/Users/Administrator/DS/IEEE-Big-Data-2020')
 sys.path.append('/Users/phil0/DS/IEEE')
@@ -67,9 +67,9 @@ def tdec(func):
     return inner 
 
 
-### Data Preprocessing ### 
+# ## Data Preprocessing ### 
 
-def get_col_stats(*cols, df, maxval = 10000, **kwargs):
+def get_col_stats(*cols, df, outlier_idx_dict, maxval = 10000, **kwargs):
     for col in cols:
         q1, q2, q3, iqr, low_outlier_threshold, high_outlier_threshold, min_, max_ = get_stats(col, df = df)
         print('Outlier low and high thresholds:', low_outlier_threshold, high_outlier_threshold)
@@ -78,15 +78,15 @@ def get_col_stats(*cols, df, maxval = 10000, **kwargs):
         print(f'Number of values greater than {maxval}: ',df.loc[df[col] > maxval].shape[0])
         viz0 = Viz(df=df, figsize = (7,4))
         viz0.make_hist(col, num_bins = 100, **kwargs)
-        
+
     
-    
+
 def get_lines(labelpath):
     with open(labelpath) as labelfile:
         lines = [line.rstrip() for line in labelfile.readlines()]
     return lines
-    
-    
+
+
 @tdec
 def get_files_in_dir(*extensions, path = './data/train/Japan/labels', show_folders = False, **kwargs):
     'Function to return all files in a directory with option of filtering for specific filetype extension'
@@ -106,7 +106,27 @@ def get_files_in_dir(*extensions, path = './data/train/Japan/labels', show_folde
         return result, folders
     return result
 
-### Computer Vision ###
+
+def getListOfFiles(*extensions, dirName):
+    '''Function to return all files of type extension saved under directory + all subdirectories of directory'''
+    # create a list of file and sub directories 
+    # names in the given directory 
+    listOfFile = os.listdir(dirName)
+    allFiles = list()
+    # Iterate over all the entries
+    for entry in listOfFile:
+        # Create full path
+        fullPath = os.path.join(dirName, entry)
+        # If entry is a directory then get the list of files in this directory 
+        if os.path.isdir(fullPath):
+            allFiles = allFiles + getListOfFiles(*extensions, dirName = fullPath)
+            continue
+        else:
+            if fullPath.split('.')[-1] in extensions:
+                allFiles.append(fullPath)
+    return allFiles   
+
+# ## Computer Vision ###
 
 def show_im(path, **kwargs):
     img = cv2.imread(path)
@@ -115,7 +135,7 @@ def show_im(path, **kwargs):
     if 'title' in kwargs:
         plt.title(kwargs['title'])
     plt.imshow(color)
-    
+
 @tdec
 def check_img_labels_match(imgspath, labelspath, imgsextension, labelsextension, **kwargs):
     if 'show_folders' in kwargs and kwargs['show_folders']:
@@ -539,7 +559,7 @@ def aug_pipeline(*seqs, imagepaths, start = 0, end = 100000, **kwargs):
     return f'''Done exporting images'''
 
 
-        
+
 def recall(tp, fn):
     return tp / (tp + fn)
 
@@ -785,7 +805,7 @@ print(\'Completed pass {counter - 1} on {test}\')
 
 
 
-#### General Torch Functions ####
+# ### General Torch Functions ####
 
 from torchvision.models.detection.faster_rcnn import FastRCNNPredictor
 import transforms as T
@@ -878,8 +898,8 @@ class IEEEDataset(torch.utils.data.Dataset):
     
     def __len__(self):
         return len(self.imgs)
-    
-    
+
+
 from PIL import ImageDraw
 
 @tdec
@@ -1075,8 +1095,8 @@ def train_fastrcnn(num_epochs, model, optimizer, lr_scheduler, data_loader_train
         lr_scheduler.step()
         # evaluate on the test dataset
         evaluate(model, data_loader_val, device=device)
-        
-        
+
+
 #import google_streetview.api
 from utils2 import *
 
@@ -1097,7 +1117,7 @@ def get_multiple_gsv_im(locations, size, heading, pitch, key, outfolder = 'gsv_d
         for i in range(len(api_list)):
             show_im(f'''{outfolder}/gsv_{i}.jpg''')
 
-        
+
 @tdec
 def get_road_section_scores(*paths, frequency_factor = 0.5):
     '''Function to produce scores of road sections by weighting road damage frequency and severity along road section'''
@@ -1129,21 +1149,21 @@ def show1(*objs):
     for obj in objs:
         try: print(obj.shape, type(obj))
         except: print(type(obj))
-            
+
 def display_np_array(array):
     #function to display numpy array using matplotlib 
     plt.imshow(array, interpolation='nearest')
     plt.show()
-    
-    
+
+
 # import the necessary packages
 import cv2
 import imutils
 import argparse
 import numpy as np
 from imutils import contours
-    
-    
+
+
 def read_ocr(ocr_path):
     # load the reference OCR-A image from disk, convert it to grayscale,
     # and threshold it, such that the digits appear as *white* on a
@@ -1224,7 +1244,7 @@ def cleanAndRead(img,contours):
                     cv2.imwrite('detected_plate.jpg', img)
                     
                     plt.show()
-                    
+
 def cleanPlate(plate):
     """This function gets the countours that most likely resemeber the shape
     of a license plate"""    
@@ -1384,7 +1404,7 @@ def read_cc_nums(ocr_path, imagepath, char_min_y):
 
     plt.imshow(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
     return charlocs, digitlocs, cnts, thresh, digitbbs, ''.join(output), text, image
-        
+
 def get_chars(img, show_image = False, **kwargs):
     if isinstance(img, str):
         img = cv2.imread(img)
@@ -1545,7 +1565,7 @@ def inv_transform(data, scaler, cols, clusters):
         if idx == 0:
             groupby_dict[col] = ['mean', 'count']
             continue
-        groupby_dict[col] = ['mean','median','std']
+        groupby_dict[col] = ['mean']
     df = data_inv.groupby('labels').agg(groupby_dict).reset_index()
     df_cols = ['_'.join(col) for col in [c for c in df.columns]]
     df.columns = df_cols
@@ -1568,7 +1588,7 @@ def get_hdbscan_cluster_stats_unscaled(data, scaler, cols, clusters):
     df.columns = df_cols
     df['perc'] = df.iloc[:,2] / df.iloc[:,2].sum()
     return df, data_inv
-    
+
 def inv_transform2(data, scaler):
     data_inv = scaler.inverse_transform(data)
     return data_inv
@@ -1593,7 +1613,7 @@ def filter_hdbscan_dfs(dfs, noise_threshold):
     for dfg, data_inv, clusters, min_cluster_size, min_samples in dfs:
         if dfg.iloc[0,-1] < noise_threshold:
             print(min_cluster_size, min_samples, '\n', dfg.head())
-            
+
 def get_hdbscan_polar(dfg, data, cols, clusters, min_cluster_size, min_samples):
     print('Min Cluster size:', min_cluster_size, '| Min Sample Size:', min_samples)
     dfg = dfg[cols]
@@ -1604,14 +1624,14 @@ def get_hdbscan_polar(dfg, data, cols, clusters, min_cluster_size, min_samples):
     dfg['perc'] = tenure_count / tenure_count.sum()
     fig.show()
     return dfg
-                    
+
 from sklearn.metrics import silhouette_score
 @tdec
 def get_silhouette_score(clusterer, X):
     clusterer.fit(X)
     label = clusterer.predict(X)
     print(f'Silhouette Score: {silhouette_score(X, label)}')
-           
+
 import nltk
 from nltk.sentiment import SentimentIntensityAnalyzer
 
@@ -1676,8 +1696,8 @@ import pathlib
 def path_bs2fs(path: str):
     p = pathlib.PureWindowsPath(path)
     print('\'' + p.as_posix() + '\'')
-    
-    
+
+
 @tdec
 def create_video_from_images(*extensions, image_dir, output_video_name, fps = 30):
     images = get_files_in_dir(*extensions, path = image_dir, fullpath = True)
@@ -1798,7 +1818,7 @@ def lemmatize_stem_remove_stopwords(text):
 
 
 
-### VIZ ###
+# ## VIZ ###
 
 import matplotlib.pyplot as plt
 import seaborn as sns
@@ -1839,13 +1859,14 @@ class Viz():
                 ax.set_xticklabels(kwargs['xticklabels'])
         if 'rotation' in kwargs: plt.xticks(rotation = kwargs['rotation'])
         if 'vlines' in kwargs:
-            trans = ax_get_axis_transform()
+            trans = ax.get_yaxis_transform()
             for vline in kwargs['vlines']:
                 plt.axvline(x = vline, linestyle = '--', color = 'red', linewidth = 0.5)
                 plt.text(vline, 0.88, str(vline), transform = trans, fontsize = 10, color = 'black')
         if 'hlines' in kwargs:
+            trans = ax.get_xaxis_transform()
             for hline in kwargs['hlines']:
-                plt.axhline(x = hline, linestyle = '--', color = 'red', linewidth = 0.5)
+                plt.axhline(y = hline, linestyle = '--', color = 'red', linewidth = 0.5)
                 plt.text(0.05, hline + 0.025, str(hline), transform = trans, fontsize = 10, color = 'black')
         if 'points' in kwargs and 'col' in kwargs:
             for point in kwargs['points']:
@@ -2010,12 +2031,12 @@ class Viz():
                 ax.axvline(mean, color = 'black', linewidth = 2, linestyle = 'dashed', label = 'mean: {:.1f}'.format(mean))
                 plt.legend(bbox_to_anchor = (1.0, 1), loc = 'upper center')
         else:
-            ax.bar(range(len(df[x])), height = df[height], align = 'center', width = barwidth) 
+            ax.bar(list(df[x]), height = df[height], align = 'center', width = barwidth) 
             rects = ax.patches
             ymin, ymax = plt.ylim()
             plt.ylim(ymin, ymax * ylim_scalefactor)
             if annots:
-                labels = [np.round(yval, 1) for yval in list(df[height])]
+                labels = [np.round(yval, 2) for yval in list(df[height])]
                 for rect, label in zip(rects, labels):
                     rectheight = rect.get_height()
                     ax.text(rect.get_x() + rect.get_width() / 2, rectheight + label_adj, label, ha = 'center', va = 'bottom')
@@ -2086,10 +2107,10 @@ class Viz():
         fig = dict(data = data, layout = layout)
         self.download_fig(**kwargs)
         return pyo.iplot(fig, filename = 'choropleth-map')
-                
+
             
-    
-    
+
+
 #creating function to quickly get an idea of values that comprise feature 
 def variable_expl(variable):
     print(accepted_df[variable].value_counts())
@@ -2104,24 +2125,29 @@ def variable_expl(variable):
 def corr_value(df, variable1, variable2):
     print(df[variable1].corr(df[variable2]))
 
-#creating a function that can print full series values in Jupyter notebook
+@tdec
+def get_corrs(*exclude, df, targetcol):
+    corrs = [] 
+    for col in df.columns:
+        if col not in exclude:
+            corr, p = scipy.stats.pearsonr(df[targetcol], df[col])
+            newrow = {'col':col, 'corr':corr, 'pval':p}
+            corrs.append(newrow)
+    resultdf = pd.DataFrame(corrs)
+    resultdf.sort_values(by = 'corr', ascending = False, inplace = True)
+    resultdf = resultdf.reset_index(drop = True)
+    return resultdf
+
+    
+    #creating a function that can print full series values in Jupyter notebook
 def print_full(x):
     pd.set_option('display.max_rows', len(x))
     print(x)
     pd.reset_option('display.max_rows')
-    
-#creating a function to return correlation values between numeric variables
-from collections import defaultdict
-
-def correlation(variable):
-    dict_output = defaultdict(int)
-    for x in accepted_df.columns:
-        corr1 = accepted_df[x].corr(accepted_df[variable])
-        dict_output[x] = abs(corr1)
-    return sorted((dict_output.items), key = lambda x: x[1], reverse = True)
 
 
-### Data cleaning
+
+# ## Data cleaning
 
 @tdec
 def get_outliers(df):
