@@ -1063,6 +1063,7 @@ import utils
 import transforms as T
 
 def get_dataloaders(idx_cutoff, train_batch_size, root, data_file, num_workers = 0):
+    '''Function to get torch dataloaders'''
     # use our dataset and defined transformations
     dataset = TorchDataset(root=root,  data_file=data_file, transforms = None)
     dataset_test = TorchDataset(root=root, data_file=data_file, transforms = None)
