@@ -1,3 +1,7 @@
+# Model weights
+*.pt
+*.h5
+
 /papers
 
 **/*.ipynb_checkpoints/
