@@ -1,29 +1,115 @@
-## Project Overview
+# YOLOv5 Distress Detection
 
-- This project focuses on building deep learning model training and evaluation pipelines for object detection of pavement road distresses in response to [IEEE 2020 Global Road Detection Challenge](https://rdd2020.sekilab.global/)
-- Object detection models used: YOLO, Faster R-CNN
-- Computer Vision frameworks used: Pytorch, Tensorflow
+A deep learning project for automated detection of pavement road distresses using computer vision techniques, developed in response to the [IEEE 2020 Global Road Detection Challenge](https://rdd2020.sekilab.global/).
 
-## Paper
+## Overview
 
-- See [paper](https://arxiv.org/abs/2202.13285) for final research insights & results
+This project implements object detection models to identify and classify various types of road distresses from images. The solution uses state-of-the-art deep learning frameworks and models to achieve accurate detection results.
 
-## GPU setup for training models
+### Key Features
 
-Hardware used: Nvidia RTX 3090
-* Given the RTX 3090 embeds Ampere architecture, it will only work with Nvidia Driver 450+ versions only.
-![image](https://user-images.githubusercontent.com/8759492/139563640-602d5dfb-48dc-44fa-b911-d9cbd0404671.png)
-https://docs.nvidia.com/deploy/cuda-compatibility/index.html
-* Given we can only work with Nvidia Driver versions 450+, we will require CUDA versions 11.0+ 
-![image](https://user-images.githubusercontent.com/8759492/139563706-be335ccb-c0e1-41cf-94b7-27c541c0adc1.png)
-https://docs.nvidia.com/deploy/cuda-compatibility/index.html
-* Given we can now only work with CUDA versions 11.0+, we will require cuDNN versions 8/0+ 
-https://docs.nvidia.com/deeplearning/cudnn/support-matrix/index.html
+- **Object Detection Models**: YOLOv5, Faster R-CNN
+- **Frameworks**: PyTorch, TensorFlow
+- **Target Application**: Road distress detection and classification
+- **Research Paper**: [View published results](https://arxiv.org/abs/2202.13285)
 
+## Project Structure
 
-- See https://medium.com/@dun.chwong/the-simple-guide-deep-learning-with-rtx-3090-cuda-cudnn-tensorflow-keras-pytorch-e88a2a8249bc for more details 
+```
+├── data_preprocessing/          # Data preprocessing utilities
+├── notebooks/                   # Jupyter notebooks for analysis and training
+│   ├── modeling/               # Model training notebooks
+│   ├── adhoc/                  # Ad-hoc analysis notebooks
+│   └── titanmu/                # TITANMU model experiments
+└── README.md                   # This file
+```
 
-## Data pipeline structure 
+## Getting Started
 
-1. XML_to_TXT_Annotation_Conversion_Pipeline.ipynb to convert XML annotation files to TXT for YOLOv5 use 
-1. A01 - Load and Augment an Image.ipynb to define augmentations to apply to input images
+### Prerequisites
+
+- Python 3.7+
+- CUDA-compatible GPU (recommended: NVIDIA RTX 3090)
+- Docker (for containerized training)
+
+### Hardware Requirements
+
+**Recommended Hardware**: NVIDIA RTX 3090
+
+**Driver and CUDA Requirements**:
+- NVIDIA Driver: 450+ (required for Ampere architecture)
+- CUDA: 11.0+ (compatible with driver 450+)
+- cuDNN: 8.0+ (compatible with CUDA 11.0+)
+
+For detailed setup instructions, see: [RTX 3090 Deep Learning Setup Guide](https://medium.com/@dun.chwong/the-simple-guide-deep-learning-with-rtx-3090-cuda-cudnn-tensorflow-keras-pytorch-e88a2a8249bc)
+
+### Docker Setup
+
+This project uses Docker for consistent training environments. The notebooks reference YOLOv5 Docker images for model training.
+
+#### Running with Docker
+
+1. **Pull the YOLOv5 Docker image**:
+   ```bash
+   docker pull ultralytics/yolov5:latest
+   ```
+
+2. **Run the container with GPU support**:
+   ```bash
+   docker run --gpus all -it --rm -v $(pwd):/workspace ultralytics/yolov5:latest
+   ```
+
+3. **For interactive development**:
+   ```bash
+   docker run --gpus all -it --rm -v $(pwd):/workspace -p 8888:8888 ultralytics/yolov5:latest jupyter lab --ip=0.0.0.0 --port=8888 --allow-root
+   ```
+
+4. **Access Jupyter Lab**:
+   Open your browser and navigate to `http://localhost:8888`
+
+#### Docker Compose (Alternative)
+
+Create a `docker-compose.yml` file for easier management:
+
+```yaml
+version: '3.8'
+services:
+  yolov5:
+    image: ultralytics/yolov5:latest
+    container_name: yolov5-distress-detection
+    runtime: nvidia
+    volumes:
+      - .:/workspace
+    ports:
+      - "8888:8888"
+    command: jupyter lab --ip=0.0.0.0 --port=8888 --allow-root
+```
+
+Then run:
+```bash
+docker-compose up
+```
+
+### Data Pipeline
+
+The project includes a structured data processing pipeline:
+
+1. **XML to TXT Conversion**: `XML_to_TXT_Annotation_Conversion_Pipeline.ipynb`
+   - Converts XML annotation files to TXT format for YOLOv5 compatibility
+
+2. **Image Augmentation**: `A01 - Load and Augment an Image.ipynb`
+   - Defines and applies data augmentation techniques to training images
+
+## Usage
+
+1. **Data Preparation**: Run the XML to TXT conversion notebook to prepare your annotations
+2. **Model Training**: Use the notebooks in the `modeling/` directory to train YOLOv5 models
+3. **Evaluation**: Evaluate model performance using the prediction notebooks
+
+## Research
+
+This project is based on research published in the paper available at: [arXiv:2202.13285](https://arxiv.org/abs/2202.13285)
+
+## Contributing
+
+Please refer to the project objectives in `objectives.md` for current goals and development priorities.
